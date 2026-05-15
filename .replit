@@ -34,4 +34,3 @@ externalPort = 3001
 [userenv]
 
 [userenv.development]
-EXPO_PUBLIC_API_URL = "https://83c68716-907a-4aa5-a327-211b9ea829b2-00-18n2in287g5lk.picard.replit.dev/api"
