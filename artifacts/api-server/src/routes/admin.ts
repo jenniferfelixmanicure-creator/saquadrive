@@ -119,7 +119,7 @@ router.get("/drivers/all", requireAdmin, async (_req, res: Response) => {
 
 // POST /api/admin/users/:userId/approve — aprovar passageiro
 router.post("/users/:userId/approve", requireAdmin, async (req, res: Response) => {
-  const userId = parseInt(req.params["userId"]);
+  const userId = parseInt(req.params["userId"] as string);
   try {
     await db.update(usersTable)
       .set({ rgStatus: "approved", isApproved: true, updatedAt: new Date() })
@@ -134,7 +134,7 @@ router.post("/users/:userId/approve", requireAdmin, async (req, res: Response) =
 
 // POST /api/admin/users/:userId/reject — rejeitar passageiro
 router.post("/users/:userId/reject", requireAdmin, async (req, res: Response) => {
-  const userId = parseInt(req.params["userId"]);
+  const userId = parseInt(req.params["userId"] as string);
   const { reason } = req.body as { reason?: string };
   try {
     await db.update(usersTable)
@@ -150,7 +150,7 @@ router.post("/users/:userId/reject", requireAdmin, async (req, res: Response) =>
 
 // POST /api/admin/drivers/:driverId/approve — aprovar motorista
 router.post("/drivers/:driverId/approve", requireAdmin, async (req, res: Response) => {
-  const driverId = parseInt(req.params["driverId"]);
+  const driverId = parseInt(req.params["driverId"] as string);
   try {
     const [driver] = await db
       .select({ userId: driversTable.userId })
@@ -178,7 +178,7 @@ router.post("/drivers/:driverId/approve", requireAdmin, async (req, res: Respons
 
 // POST /api/admin/drivers/:driverId/reject — rejeitar motorista
 router.post("/drivers/:driverId/reject", requireAdmin, async (req, res: Response) => {
-  const driverId = parseInt(req.params["driverId"]);
+  const driverId = parseInt(req.params["driverId"] as string);
   const { reason } = req.body as { reason?: string };
   try {
     await db.update(driversTable)

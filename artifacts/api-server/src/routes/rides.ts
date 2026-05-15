@@ -69,14 +69,14 @@ router.get("/:rideId/chat", requireAuth, async (req: AuthRequest, res: Response)
       .select()
       .from(chatMessagesTable)
       .where(eq(chatMessagesTable.rideId, rideId))
-      .orderBy(asc(chatMessagesTable.createdAt));
+      .orderBy(asc(chatMessagesTable.timestamp));
 
     res.json(messages.map((m) => ({
       id: m.id.toString(),
       senderId: m.senderId,
       senderName: m.senderName,
       text: m.message,
-      timestamp: new Date(m.createdAt).getTime(),
+      timestamp: m.timestamp ? new Date(m.timestamp).getTime() : Date.now(),
     })));
   } catch (error) {
     logger.error({ error }, "Erro ao buscar mensagens da corrida");

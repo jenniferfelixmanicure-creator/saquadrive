@@ -1,27 +1,28 @@
 kind = "mobile"
-previewPath = "/"
-title = "SaquaDrive"
-version = "1.0.0"
-id = "artifacts/saquadrive"
-router = "expo-domain"
+  previewPath = "/"
+  title = "ZeroRisco"
+  version = "1.0.0"
+  id = "artifacts/saquadrive"
+  router = "expo-domain"
 
-[[integratedSkills]]
-name = "expo"
-version = "1.0.0"
+  [[integratedSkills]]
+  name = "expo"
+  version = "1.0.0"
 
-[[services]]
-ensurePreviewReachable = "/status"
-name = "expo"
-paths = [ "/" ]
-localPort = 24817
+  [[services]]
+  ensurePreviewReachable = "/status"
+  name = "expo"
+  paths = [ "/" ]
+  localPort = 24817
 
-[services.development]
-run = "pnpm --filter @workspace/saquadrive run dev"
+  [services.development]
+  run = "pnpm --filter @workspace/zerorisco run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/saquadrive", "run", "build" ]
-run = [ "pnpm", "--filter", "@workspace/saquadrive", "run", "serve" ]
+  [services.production]
+  build = [ "pnpm", "--filter", "@workspace/zerorisco", "run", "build" ]
+  run = [ "pnpm", "--filter", "@workspace/zerorisco", "run", "serve" ]
 
-[services.env]
-PORT = "24817"
-BASE_PATH = "/"
+  [services.env]
+  PORT = "24817"
+  BASE_PATH = "/"
+  
