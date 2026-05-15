@@ -10,7 +10,16 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const connectionString = process.env.DATABASE_URL!;
+const isExternalRender = connectionString.includes(".render.com");
+export const pool = new Pool({
+  connectionString,
+  ssl: isExternalRender ? { rejectUnauthorized: false } : false,
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 10000,
+  max: 5,
+});
+pool.on("error", (_err) => {});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";

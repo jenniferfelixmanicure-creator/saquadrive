@@ -1,38 +1,93 @@
 {
   "expo": {
-    "name": "SaquaDrive",
-    "slug": "saquadrive",
+    "name": "ZeroRisco",
+    "slug": "zerorisco-saquarema",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "saquadrive",
-    "userInterfaceStyle": "automatic",
+    "scheme": "zerorisco",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "backgroundColor": "#0D0D0D",
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#00000000",
+      "translucent": true
+    },
+    "androidNavigationBar": {
+      "visible": "immersive",
+      "barStyle": "dark-content",
+      "backgroundColor": "#00000000"
+    },
     "splash": {
-      "image": "./assets/images/icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#0D0D0D"
+    },
+    "android": {
+      "package": "com.zerorisco.driver.app",
+      "softwareKeyboardLayoutMode": "pan",
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#0D0D0D"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#0D0D0D"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBr--KxYjgHbY7uoaeAzYsnc3y4iuK4hjs"
+        }
+      },
+
     },
     "ios": {
-      "supportsTablet": false
-    },
-    "android": {},
-    "web": {
-      "favicon": "./assets/images/icon.png"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zerorisco.driver.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBr--KxYjgHbY7uoaeAzYsnc3y4iuK4hjs"
+      }
     },
     "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
+      "expo-navigation-bar",
       [
-        "expo-router",
+        "expo-location",
         {
-          "origin": "https://replit.com/"
+          "locationAlwaysPermission": "Permita que o ZeroRisco acesse sua localização para encontrar corridas próximas."
         }
       ],
-      "expo-font",
-      "expo-web-browser"
+      [
+        "@maplibre/maplibre-react-native",
+        {
+          "RNMapLibreGLLocationLayerEnabled": true,
+          "android": {
+            "styleURL": "https://tiles.openfreemap.org/styles/liberty"
+          }
+        }
+      ]
     ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+    "owner": "pitaandre",
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "backgroundColor": "#00000000",
+        "barStyle": "dark",
+        "legacyVisible": "immersive"
+      },
+      "eas": {
+        "projectId": "c891dbd7-76fc-4255-941d-8b51d588483b"
+      }
     }
   }
 }
