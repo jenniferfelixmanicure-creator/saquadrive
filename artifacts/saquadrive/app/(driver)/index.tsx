@@ -599,14 +599,26 @@ export default function DriverHomeScreen() {
             </TouchableOpacity>
 
             {ridePhase === "picking_up" && (
-              <TouchableOpacity
-                style={[styles.arrivedBtn, { backgroundColor: colors.primary }]}
-                onPress={handleArrived}
-                activeOpacity={0.85}
-              >
-                <Feather name="map-pin" size={18} color="#fff" />
-                <Text style={styles.finishText}>Cheguei ao local</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.arrivedBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleArrived}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="map-pin" size={18} color="#fff" />
+                  <Text style={styles.finishText}>Cheguei ao local</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.cancelRideBtn, { borderColor: colors.border }]}
+                  onPress={handleCancelActiveRide}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="x-circle" size={16} color={colors.mutedForeground} />
+                  <Text style={[styles.cancelRideBtnText, { color: colors.mutedForeground }]}>
+                    Cancelar corrida
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
 
             {ridePhase === "in_progress" && (
@@ -769,6 +781,11 @@ const styles = StyleSheet.create({
     height: 50, borderRadius: 14, marginBottom: 10,
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
   },
+  cancelRideBtn: {
+    height: 42, borderRadius: 12, borderWidth: 1, marginBottom: 10,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+  },
+  cancelRideBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
   pinOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.75)",
     alignItems: "center", justifyContent: "center",

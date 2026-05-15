@@ -20,6 +20,7 @@ const colors = {
     input: "#1E1E1E",
     success: "#30D158",
     warning: "#FF9F0A",
+    error: "#FF3B30",
   },
   dark: {
     text: "#FFFFFF",
@@ -42,6 +43,7 @@ const colors = {
     input: "#1E1E1E",
     success: "#30D158",
     warning: "#FF9F0A",
+    error: "#FF3B30",
   },
   radius: 14,
 };

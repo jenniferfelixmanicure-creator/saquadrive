@@ -134,11 +134,11 @@ export default function PassengerHomeScreen() {
     searchTimer.current = setTimeout(async () => {
       try {
         const predictions = await searchPlaces(searchText);
-        setSearchResults(predictions.map((p: { description: string; place_id: string }) => ({
+        setSearchResults(predictions.map((p) => ({
           address: p.description,
-          lat: 0,
-          lng: 0,
-          placeId: p.place_id,
+          lat: p.lat,
+          lng: p.lng,
+          placeId: p.placeId,
         })));
       } catch {
         setSearchResults([]);

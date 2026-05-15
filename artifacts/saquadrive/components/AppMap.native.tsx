@@ -1,11 +1,19 @@
 import React, { useRef, useEffect } from "react";
 import { StyleSheet, View, Text } from "react-native";
-import MapLibreGL from "@maplibre/maplibre-react-native";
-
-MapLibreGL.setAccessToken(null);
+import {
+  Map,
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Marker,
+  UserLocation,
+  type CameraRef,
+  type LngLat,
+  type LngLatBounds,
+} from "@maplibre/maplibre-react-native";
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/dark";
-const SAQUAREMA: [number, number] = [-42.51, -22.92];
+const SAQUAREMA: LngLat = [-42.51, -22.92];
 
 type LatLng = { lat: number; lng: number };
 
@@ -31,49 +39,49 @@ export default function AppMap({
   driverRealtimeLocation,
   onMapPress,
 }: Props) {
-  const cameraRef = useRef<MapLibreGL.Camera>(null);
+  const cameraRef = useRef<CameraRef>(null);
 
-  const center: [number, number] = origin
+  const initialCenter: LngLat = origin
     ? [origin.lng, origin.lat]
     : destination
     ? [destination.lng, destination.lat]
     : SAQUAREMA;
 
+  // Fit bounds quando origem e destino estão definidos (como Uber)
   useEffect(() => {
     if (origin && destination && cameraRef.current) {
       const timer = setTimeout(() => {
+        const west = Math.min(origin.lng, destination.lng);
+        const east = Math.max(origin.lng, destination.lng);
+        const south = Math.min(origin.lat, destination.lat);
+        const north = Math.max(origin.lat, destination.lat);
         cameraRef.current?.fitBounds(
-          [Math.max(origin.lng, destination.lng), Math.max(origin.lat, destination.lat)],
-          [Math.min(origin.lng, destination.lng), Math.min(origin.lat, destination.lat)],
-          [160, 60, 320, 60],
-          600
+          [west, south, east, north] as LngLatBounds,
+          { padding: { top: 160, right: 60, bottom: 320, left: 60 }, duration: 600 },
         );
       }, 600);
       return () => clearTimeout(timer);
     }
   }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng]);
 
+  // Mostrar motorista + passageiro no mapa (como Uber — ambos visíveis)
   useEffect(() => {
-    if (driverRealtimeLocation && cameraRef.current) {
-      if (origin) {
-        // Mostra motorista + ponto relevante (busca ou destino) como o Uber
-        const minLng = Math.min(driverRealtimeLocation.longitude, origin.lng);
-        const maxLng = Math.max(driverRealtimeLocation.longitude, origin.lng);
-        const minLat = Math.min(driverRealtimeLocation.latitude, origin.lat);
-        const maxLat = Math.max(driverRealtimeLocation.latitude, origin.lat);
-        cameraRef.current.fitBounds(
-          [maxLng, maxLat],
-          [minLng, minLat],
-          [120, 60, 260, 60],
-          700,
-        );
-      } else {
-        cameraRef.current.setCamera({
-          centerCoordinate: [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
-          zoomLevel: 15,
-          animationDuration: 800,
-        });
-      }
+    if (!driverRealtimeLocation || !cameraRef.current) return;
+    if (origin) {
+      const west = Math.min(driverRealtimeLocation.longitude, origin.lng);
+      const east = Math.max(driverRealtimeLocation.longitude, origin.lng);
+      const south = Math.min(driverRealtimeLocation.latitude, origin.lat);
+      const north = Math.max(driverRealtimeLocation.latitude, origin.lat);
+      cameraRef.current.fitBounds(
+        [west, south, east, north] as LngLatBounds,
+        { padding: { top: 120, right: 60, bottom: 260, left: 60 }, duration: 700 },
+      );
+    } else {
+      cameraRef.current.easeTo({
+        center: [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude] as LngLat,
+        zoom: 15,
+        duration: 800,
+      });
     }
   }, [driverRealtimeLocation?.latitude, driverRealtimeLocation?.longitude, origin?.lat, origin?.lng]);
 
@@ -98,97 +106,96 @@ export default function AppMap({
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=pt-BR`,
-        { headers: { "User-Agent": "ZeroRisco/1.0" } }
+        { headers: { "User-Agent": "ZeroRisco/1.0" } },
       );
-      const data = await res.json();
+      const data = await res.json() as {
+        display_name?: string;
+        address?: {
+          road?: string; house_number?: string; suburb?: string;
+          city?: string; town?: string; village?: string;
+        };
+      };
       if (data?.display_name) {
         const parts: string[] = [];
         if (data.address?.road) parts.push(data.address.road);
-        if (data.address?.house_number) parts[0] = (parts[0] ?? "") + ", " + data.address.house_number;
+        if (data.address?.house_number)
+          parts[0] = (parts[0] ?? "") + ", " + data.address.house_number;
         if (data.address?.suburb) parts.push(data.address.suburb);
-        if (data.address?.city || data.address?.town || data.address?.village)
-          parts.push(data.address.city ?? data.address.town ?? data.address.village);
+        const city = data.address?.city ?? data.address?.town ?? data.address?.village;
+        if (city) parts.push(city);
         return parts.length > 0 ? parts.join(" — ") : data.display_name;
       }
     } catch {}
     return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
 
-  async function handleMapPress(e: { geometry: { coordinates: [number, number] } }) {
+  async function handleMapPress(e: { nativeEvent: { payload: { lngLat: LngLat } } }) {
     if (!onMapPress) return;
-    const [lng, lat] = e.geometry.coordinates;
+    const [lng, lat] = e.nativeEvent.payload.lngLat;
     const address = await reverseGeocode(lat, lng);
     onMapPress({ address, lat, lng });
   }
 
   return (
-    <MapLibreGL.MapView
+    <Map
       style={StyleSheet.absoluteFill}
-      styleURL={STYLE_URL}
-      onPress={onMapPress ? handleMapPress : undefined}
-      compassEnabled={false}
-      logoEnabled={false}
-      attributionEnabled={false}
+      mapStyle={STYLE_URL}
+      onPress={onMapPress ? handleMapPress as never : undefined}
     >
-      <MapLibreGL.Camera
+      <Camera
         ref={cameraRef}
-        zoomLevel={14}
-        centerCoordinate={center}
+        initialViewState={{ center: initialCenter, zoom: 14 }}
       />
 
-      <MapLibreGL.UserLocation visible />
+      <UserLocation />
 
       {origin && (
-        <MapLibreGL.PointAnnotation
-          id="origin"
-          coordinate={[origin.lng, origin.lat]}
-        >
+        <Marker lngLat={[origin.lng, origin.lat] as LngLat}>
           <View style={[styles.marker, { backgroundColor: originColor }]}>
             <View style={styles.markerInner} />
           </View>
-        </MapLibreGL.PointAnnotation>
+        </Marker>
       )}
 
       {destination && (
-        <MapLibreGL.PointAnnotation
-          id="destination"
-          coordinate={[destination.lng, destination.lat]}
-        >
+        <Marker lngLat={[destination.lng, destination.lat] as LngLat}>
           <View style={styles.destPin}>
             <View style={[styles.destPinHead, { backgroundColor: destColor }]}>
               <View style={styles.destPinInner} />
             </View>
             <View style={[styles.destPinTail, { borderTopColor: destColor }]} />
           </View>
-        </MapLibreGL.PointAnnotation>
+        </Marker>
       )}
 
       {driverRealtimeLocation && (
-        <MapLibreGL.PointAnnotation
-          id="driver"
-          coordinate={[driverRealtimeLocation.longitude, driverRealtimeLocation.latitude]}
+        <Marker
+          lngLat={[driverRealtimeLocation.longitude, driverRealtimeLocation.latitude] as LngLat}
         >
           <View style={styles.driverMarker}>
             <Text style={styles.driverMarkerEmoji}>🚗</Text>
           </View>
-        </MapLibreGL.PointAnnotation>
+        </Marker>
       )}
 
       {routeGeoJSON && (
-        <MapLibreGL.ShapeSource id="route" shape={routeGeoJSON}>
-          <MapLibreGL.LineLayer
+        <GeoJSONSource id="route" data={routeGeoJSON}>
+          <Layer
             id="routeLine"
-            style={{
-              lineColor: destColor,
-              lineWidth: 4,
-              lineOpacity: 0.8,
-              lineJoin: "round",
-              lineCap: "round",
+            type="line"
+            paint={{
+              "line-color": destColor,
+              "line-width": 4,
+              "line-opacity": 0.8,
+            }}
+            layout={{
+              "line-join": "round",
+              "line-cap": "round",
             }}
           />
-        </MapLibreGL.ShapeSource>
+        </GeoJSONSource>
       )}
-    </MapLibreGL.MapView>
+    </Map>
   );
 }
 

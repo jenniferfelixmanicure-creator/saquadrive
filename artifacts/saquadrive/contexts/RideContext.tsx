@@ -195,6 +195,22 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       setRideStatus(currentRideRef.current.status);
     });
 
+    socket.on("passenger:ride_cancelled_by_driver", ({ rideId }: { rideId: string }) => {
+      if (currentRideRef.current?.id !== rideId) return;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+      setCurrentRide(null);
+      currentRideRef.current = null;
+      setRideStatus("idle");
+      setRouteCoordinates([]);
+      setDriverRealtimeLocation(null);
+      Alert.alert(
+        "Corrida cancelada",
+        "O motorista cancelou a corrida. Por favor, solicite uma nova.",
+        [{ text: "OK" }]
+      );
+    });
+
     socket.on("driver:location_update", ({
       rideId, latitude, longitude,
     }: { rideId: string; latitude: number; longitude: number }) => {
@@ -212,6 +228,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       socket.off("passenger:price_confirmed");
       socket.off("passenger:error");
       socket.off("passenger:session_restored");
+      socket.off("passenger:ride_cancelled_by_driver");
       socket.off("driver:location_update");
     };
   }, [socket]);

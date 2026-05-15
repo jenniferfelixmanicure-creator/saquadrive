@@ -424,6 +424,15 @@ export function registerRideSocket(io: Server) {
       }
     });
 
+    socket.on("driver:cancel", async ({ rideId }: { rideId: string }) => {
+      const active = activeRides.get(rideId);
+      if (!active) return;
+      io.to(active.passengerSocketId).emit("passenger:ride_cancelled_by_driver", { rideId });
+      activeRides.delete(rideId);
+      logger.info({ rideId }, "Corrida cancelada pelo motorista");
+      await db.update(ridesTable).set({ status: "cancelled", driverId: null, updatedAt: new Date() }).where(eq(ridesTable.id, rideId)).catch(() => {});
+    });
+
     socket.on("passenger:cancel", async ({ rideId }: { rideId: string }) => {
       if (pendingRides.has(rideId)) {
         pendingRides.delete(rideId);
