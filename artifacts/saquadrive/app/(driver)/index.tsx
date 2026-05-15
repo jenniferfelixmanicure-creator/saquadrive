@@ -180,6 +180,21 @@ export default function DriverHomeScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     });
 
+    socket.on("driver:ride_cancelled_for_others", ({ rideId }: { rideId: string }) => {
+      setRequests((prev) => prev.filter((r) => r.rideId !== rideId));
+    });
+
+    socket.on("passenger:ride_cancelled_by_driver", ({ rideId }: { rideId: string }) => {
+      if (activeRide?.rideId === rideId) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        phaseTimers.current.forEach(clearTimeout);
+        phaseTimers.current = [];
+        setActiveRide(null);
+        setRidePhase("idle");
+        setRouteCoords([]);
+      }
+    });
+
     const chatHandler = (msg: ChatMessage) => {
       setChatMessages((prev) => [...prev, msg]);
       if (!chatOpen) {
@@ -205,6 +220,8 @@ export default function DriverHomeScreen() {
       socket.off("driver:ride_request");
       socket.off("driver:ride_cancelled");
       socket.off("driver:ride_accepted_by_other");
+      socket.off("driver:ride_cancelled_for_others");
+      socket.off("passenger:ride_cancelled_by_driver");
       socket.off("chat:message", chatHandler);
       socket.off("driver:pin_invalid");
       socket.off("driver:error");
@@ -314,6 +331,32 @@ export default function DriverHomeScreen() {
     setRouteCoords([]);
     setChatMessages([]);
     setUnreadCount(0);
+  }
+
+  function handleCancelActiveRide() {
+    if (!activeRide) return;
+    Alert.alert(
+      "Cancelar corrida",
+      "Tem certeza que deseja cancelar esta corrida? O passageiro será notificado.",
+      [
+        { text: "Não", style: "cancel" },
+        {
+          text: "Cancelar corrida",
+          style: "destructive",
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            if (socket && connected) socket.emit("driver:cancel", { rideId: activeRide.rideId });
+            phaseTimers.current.forEach(clearTimeout);
+            phaseTimers.current = [];
+            setActiveRide(null);
+            setRidePhase("idle");
+            setRouteCoords([]);
+            setChatMessages([]);
+            setUnreadCount(0);
+          },
+        },
+      ]
+    );
   }
 
   const dotOpacity = dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });

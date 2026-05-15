@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext, useContext, useEffect, useRef, useState,
 } from "react";
+import { Alert } from "react-native";
 import * as Location from "expo-location";
 import { useSocket } from "./SocketContext";
 import { getRoute } from "../lib/google-maps";
@@ -151,6 +152,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       if (currentRideRef.current?.id !== rideId) return;
       setCurrentRide((prev) => prev ? { ...prev, status: "in_progress" } : prev);
       setRideStatus("in_progress");
+      if (currentRideRef.current) {
+        generateRoute(currentRideRef.current.origin, currentRideRef.current.destination);
+      }
     });
 
     socket.on("passenger:trip_completed", ({ rideId }: { rideId: string }) => {
@@ -164,6 +168,31 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
       setRideStatus("idle");
+      setCurrentRide(null);
+      currentRideRef.current = null;
+    });
+
+    socket.on("passenger:price_confirmed", ({ rideId, price, pin }: { rideId: string; price: number; pin: string }) => {
+      setCurrentRide((prev) => {
+        if (!prev || prev.id !== rideId) return prev;
+        const updated = { ...prev, price, pin };
+        currentRideRef.current = updated;
+        return updated;
+      });
+    });
+
+    socket.on("passenger:error", ({ message }: { code: string; message: string }) => {
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+      setRideStatus("idle");
+      setCurrentRide(null);
+      currentRideRef.current = null;
+      Alert.alert("Atenção", message);
+    });
+
+    socket.on("passenger:session_restored", ({ rideId }: { rideId: string }) => {
+      if (!currentRideRef.current || currentRideRef.current.id !== rideId) return;
+      setRideStatus(currentRideRef.current.status);
     });
 
     socket.on("driver:location_update", ({
@@ -180,6 +209,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       socket.off("passenger:trip_started");
       socket.off("passenger:trip_completed");
       socket.off("passenger:no_drivers");
+      socket.off("passenger:price_confirmed");
+      socket.off("passenger:error");
+      socket.off("passenger:session_restored");
       socket.off("driver:location_update");
     };
   }, [socket]);

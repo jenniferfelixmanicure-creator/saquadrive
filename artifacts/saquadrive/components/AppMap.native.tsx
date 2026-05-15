@@ -55,13 +55,27 @@ export default function AppMap({
 
   useEffect(() => {
     if (driverRealtimeLocation && cameraRef.current) {
-      cameraRef.current.setCamera({
-        centerCoordinate: [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
-        zoomLevel: 15,
-        animationDuration: 800,
-      });
+      if (origin) {
+        // Mostra motorista + ponto relevante (busca ou destino) como o Uber
+        const minLng = Math.min(driverRealtimeLocation.longitude, origin.lng);
+        const maxLng = Math.max(driverRealtimeLocation.longitude, origin.lng);
+        const minLat = Math.min(driverRealtimeLocation.latitude, origin.lat);
+        const maxLat = Math.max(driverRealtimeLocation.latitude, origin.lat);
+        cameraRef.current.fitBounds(
+          [maxLng, maxLat],
+          [minLng, minLat],
+          [120, 60, 260, 60],
+          700,
+        );
+      } else {
+        cameraRef.current.setCamera({
+          centerCoordinate: [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
+          zoomLevel: 15,
+          animationDuration: 800,
+        });
+      }
     }
-  }, [driverRealtimeLocation]);
+  }, [driverRealtimeLocation?.latitude, driverRealtimeLocation?.longitude, origin?.lat, origin?.lng]);
 
   const routeGeoJSON =
     routeCoordinates && routeCoordinates.length > 1
