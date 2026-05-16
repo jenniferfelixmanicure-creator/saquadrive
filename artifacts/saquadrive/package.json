@@ -58,6 +58,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@sentry/react-native": "~6.6.0",
     "expo": "~54.0.34",
     "expo-device": "~55.0.17",
     "expo-notifications": "~55.0.23",
