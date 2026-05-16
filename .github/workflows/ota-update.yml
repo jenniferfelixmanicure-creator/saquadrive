@@ -1,0 +1,58 @@
+name: Publicar Update OTA (EAS Update)
+
+  on:
+    push:
+      branches: [main]
+      paths:
+        - 'artifacts/saquadrive/**'
+    workflow_dispatch:
+      inputs:
+        channel:
+          description: 'Canal de publicação (preview ou production)'
+          required: false
+          default: 'preview'
+
+  concurrency:
+    group: ota-update
+    cancel-in-progress: true
+
+  jobs:
+    ota:
+      name: Publicar OTA via EAS Update
+      runs-on: ubuntu-latest
+
+      steps:
+        - name: Checkout repositório
+          uses: actions/checkout@v4
+
+        - name: Configurar Node.js 20
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
+
+        - name: Instalar pnpm
+          uses: pnpm/action-setup@v4
+          with:
+            version: 9
+
+        - name: Instalar dependências
+          run: pnpm install --no-frozen-lockfile
+
+        - name: Publicar update OTA no canal preview
+          working-directory: artifacts/saquadrive
+          env:
+            EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+            EXPO_PUBLIC_API_URL: https://saquadrive.onrender.com
+          run: |
+            CHANNEL="${{ github.event.inputs.channel || 'preview' }}"
+            npx eas-cli update \
+              --channel "$CHANNEL" \
+              --message "OTA: $(git log -1 --pretty=%s)" \
+              --non-interactive
+
+        - name: Resumo do update publicado
+          run: |
+            echo "✅ Update OTA publicado com sucesso!"
+            echo "Canal: ${{ github.event.inputs.channel || 'preview' }}"
+            echo "Commit: $(git log -1 --pretty=oneline)"
+  
