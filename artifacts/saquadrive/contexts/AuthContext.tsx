@@ -103,13 +103,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedToken && storedRefresh) {
         const expiry = decodeJwtExpiry(storedToken);
         const expiresIn = expiry ? expiry - Date.now() : 0;
+        
+        // Se o token expira em menos de 24h, tenta renovar
         if (expiresIn < 24 * 60 * 60 * 1000) {
           try {
+            // Timeout mais agressivo de 5s para não travar o app no boot
             const res = await fetchWithTimeout(`${API_URL}/api/auth/refresh`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ refreshToken: storedRefresh }),
-            }, 8000);
+            }, 5000);
+            
             if (res.ok) {
               const data = await res.json() as { token: string; refreshToken: string };
               activeToken = data.token;
@@ -118,17 +122,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken),
               ]);
               setRefreshToken(data.refreshToken);
-            } else {
+            } else if (res.status === 401 || res.status === 403) {
+              // Token de refresh inválido, limpa tudo
               await Promise.all([
                 AsyncStorage.removeItem(TOKEN_KEY),
                 AsyncStorage.removeItem(REFRESH_TOKEN_KEY),
                 AsyncStorage.removeItem(USER_KEY),
                 AsyncStorage.removeItem(MODE_KEY),
               ]);
-              return;
+              activeToken = null;
             }
-          } catch {
-            // Erro de rede/timeout — mantém token existente para tentar offline
+          } catch (e) {
+            // Erro de rede ou timeout - se o token ainda for válido (não expirou totalmente), 
+            // permite que o usuário entre em modo offline ou tente novamente depois
+            if (expiresIn <= 0) {
+              activeToken = null; // Token realmente expirado e sem rede para renovar
+            }
           }
         } else {
           setRefreshToken(storedRefresh);

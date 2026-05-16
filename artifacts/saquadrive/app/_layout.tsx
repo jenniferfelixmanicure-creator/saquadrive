@@ -51,15 +51,23 @@ export default function RootLayout() {
   const [splashHidden, setSplashHidden] = useState(false);
 
   useEffect(() => {
+    async function hideSplash() {
+      try {
+        await SplashScreen.hideAsync();
+      } catch (e) {
+        // Ignore errors
+      } finally {
+        setSplashHidden(true);
+      }
+    }
+
     const timeout = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-      setSplashHidden(true);
-    }, 4000);
+      hideSplash();
+    }, 3000); // Reduzido para 3s para melhor UX
 
     if (fontsLoaded || fontError) {
       clearTimeout(timeout);
-      SplashScreen.hideAsync().catch(() => {});
-      setSplashHidden(true);
+      hideSplash();
     }
 
     return () => clearTimeout(timeout);
