@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/react-native";
+  import * as Updates from "expo-updates";
   import {
     Inter_400Regular,
     Inter_500Medium,
@@ -41,7 +42,6 @@ import * as Sentry from "@sentry/react-native";
   // ── Splash — previne auto-hide e garante fechamento em no máximo 3s ─────────
   try { SplashScreen.preventAutoHideAsync(); } catch {}
 
-  // Failsafe absoluto: splash some em 3s mesmo se o app crashar antes do mount
   const _splashFailsafe = setTimeout(() => {
     try { SplashScreen.hideAsync(); } catch {}
   }, 3000);
@@ -52,13 +52,12 @@ import * as Sentry from "@sentry/react-native";
     },
   });
 
-  // ── Captura erros JS globais fora do React ───────────────────────────────────
+  // ── Captura erros JS globais ─────────────────────────────────────────────────
   let _globalCrashError: Error | null = null;
   try {
     const prev = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
       _globalCrashError = error;
-      // Garante que splash some mesmo em caso de crash fatal
       try { SplashScreen.hideAsync(); } catch {}
       if (SENTRY_DSN) { try { Sentry.captureException(error); } catch {} }
       prev?.(error, isFatal);
@@ -82,6 +81,22 @@ import * as Sentry from "@sentry/react-native";
       }
     }
     return <>{children}</>;
+  }
+
+  // ── OTA Update — verifica e aplica atualização silenciosamente ───────────────
+  async function checkForOTAUpdate() {
+    try {
+      // Só verifica em builds de produção (não em dev/Expo Go)
+      if (__DEV__ || !Updates.isEmbeddedLaunch === false) return;
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        // Reinicia o app para aplicar a atualização
+        await Updates.reloadAsync();
+      }
+    } catch {
+      // Falha silenciosa — nunca bloqueia o app
+    }
   }
 
   // ── Navegação ────────────────────────────────────────────────────────────────
@@ -110,13 +125,18 @@ import * as Sentry from "@sentry/react-native";
       ...Feather.font,
     });
 
-    // Esconde splash assim que o componente monta — não espera fontes
+    // 1. Esconde splash assim que o componente monta — não espera fontes nem rede
     useEffect(() => {
       clearTimeout(_splashFailsafe);
       try { SplashScreen.hideAsync(); } catch {}
     }, []);
 
-    // Verifica erros globais capturados antes do React
+    // 2. Verifica atualização OTA em background (não bloqueia a UI)
+    useEffect(() => {
+      checkForOTAUpdate();
+    }, []);
+
+    // 3. Verifica erros globais capturados antes do React montar
     useEffect(() => {
       if (_globalCrashError) setCrashError(_globalCrashError);
       const id = setInterval(() => {
@@ -125,6 +145,7 @@ import * as Sentry from "@sentry/react-native";
       return () => clearInterval(id);
     }, [crashError]);
 
+    // 4. Configura barra de navegação Android
     useEffect(() => {
       try { registerForPushNotificationsAsync(); } catch {}
       if (Platform.OS === "android") {
