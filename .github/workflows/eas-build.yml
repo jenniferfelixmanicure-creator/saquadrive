@@ -1,0 +1,44 @@
+name: Build APK (Preview)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'artifacts/saquadrive/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: artifacts/saquadrive
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Instalar dependências
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+
+      - name: Build APK com EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Iniciar build
+        run: eas build --profile preview --platform android --non-interactive
