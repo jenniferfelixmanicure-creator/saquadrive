@@ -11,13 +11,14 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as NavigationBar from "expo-navigation-bar";
 import { Platform } from "react-native";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { registerForPushNotificationsAsync } from "@/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorFallback } from "@/components/ErrorFallback";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
@@ -25,6 +26,16 @@ import { SocketProvider } from "@/contexts/SocketContext";
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
+
+// Captura erros JS não tratados (fora do React) e exibe na tela
+let _globalCrashError: Error | null = null;
+try {
+  const prev = ErrorUtils.getGlobalHandler();
+  ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
+    _globalCrashError = error;
+    prev?.(error, isFatal);
+  });
+} catch {}
 
 function RootLayoutNav() {
   return (
@@ -40,6 +51,8 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [crashError, setCrashError] = useState<Error | null>(null);
+
   useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -48,11 +61,19 @@ export default function RootLayout() {
     ...Feather.font,
   });
 
-  // Esconde a splash imediatamente — não espera fontes.
-  // Fontes carregam em segundo plano sem bloquear o app.
+  // Esconde splash imediatamente — sem esperar fontes
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
+
+  // Verifica se houve crash global antes do React renderizar
+  useEffect(() => {
+    if (_globalCrashError) setCrashError(_globalCrashError);
+    const id = setInterval(() => {
+      if (_globalCrashError && !crashError) setCrashError(_globalCrashError);
+    }, 500);
+    return () => clearInterval(id);
+  }, [crashError]);
 
   useEffect(() => {
     registerForPushNotificationsAsync();
@@ -62,6 +83,15 @@ export default function RootLayout() {
       NavigationBar.setBackgroundColorAsync("#00000000").catch(() => {});
     }
   }, []);
+
+  // Mostra erro global visível na tela (para diagnóstico)
+  if (crashError) {
+    return (
+      <SafeAreaProvider>
+        <ErrorFallback error={crashError} resetError={() => setCrashError(null)} />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
