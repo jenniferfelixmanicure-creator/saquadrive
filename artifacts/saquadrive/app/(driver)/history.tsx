@@ -160,7 +160,7 @@ export default function DriverHistoryScreen() {
         </View>
         {rides.length > 0 && (
           <View style={[styles.countBadge, { backgroundColor: colors.success + "22" }]}>
-            <Text style={[styles.countText, { color: colors.success }]}>{rides.length}</Text>
+            <Text style={[styles.countText, { color: colors.success }]}>{rides.filter((r) => r.status === "completed").length}</Text>
           </View>
         )}
       </View>
