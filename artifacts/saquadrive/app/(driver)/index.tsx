@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppMap from "@/components/AppMap";
-import Svg, { Circle, Path, Rect, G, Defs, LinearGradient as SvgLinearGradient, Stop, Ellipse, Line } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import SubscriptionLock from "@/components/SubscriptionLock";
 import SOSButton from "@/components/SOSButton";
 
@@ -56,77 +56,129 @@ function getAddressText(field: RideLocation | string): string {
 
 
 // ─── Ilustração Conta em Análise ────────────────────────────────────────────
-function NotApprovedIllustration() {
+function NotApprovedIllustration({ floatY }: { floatY: Animated.AnimatedInterpolation<number> }) {
   return (
-    <Svg width={140} height={130} viewBox="0 0 140 130">
-      <Defs>
-        <SvgLinearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#1E3A5F" stopOpacity="1" />
-          <Stop offset="1" stopColor="#0D1F3C" stopOpacity="1" />
-        </SvgLinearGradient>
-        <SvgLinearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#34C759" stopOpacity="1" />
-          <Stop offset="1" stopColor="#28A846" stopOpacity="1" />
-        </SvgLinearGradient>
-        <SvgLinearGradient id="clipGrad" x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor="#FFFFFF" stopOpacity="1" />
-          <Stop offset="1" stopColor="#E8EDF5" stopOpacity="1" />
-        </SvgLinearGradient>
-        <SvgLinearGradient id="loopGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor="#4F8EF7" stopOpacity="1" />
-          <Stop offset="1" stopColor="#2563EB" stopOpacity="1" />
-        </SvgLinearGradient>
-      </Defs>
+    <Animated.View style={[naStyles.illRoot, { transform: [{ translateY: floatY }] }]}>
+      {/* Glow orb de fundo */}
+      <View style={naStyles.glowOrb} />
 
-      {/* Clipboard body */}
-      <Rect x="32" y="20" width="76" height="90" rx="8" ry="8" fill="url(#clipGrad)" />
+      {/* Cartão de documento principal */}
+      <View style={naStyles.docCard}>
+        {/* Clipe do clipboard no topo */}
+        <View style={naStyles.clipTop}>
+          <View style={naStyles.clipHole} />
+        </View>
 
-      {/* Clipboard clip */}
-      <Rect x="54" y="12" width="32" height="18" rx="5" ry="5" fill="#2563EB" />
-      <Rect x="60" y="18" width="20" height="8" rx="3" ry="3" fill="#1A3A8F" />
+        {/* Avatar do motorista */}
+        <View style={naStyles.avatarRing}>
+          <View style={naStyles.avatarInner}>
+            <Feather name="user" size={22} color="#fff" />
+          </View>
+        </View>
 
-      {/* Avatar circle */}
-      <Circle cx="70" cy="50" r="14" fill="#34C759" opacity="0.15" />
-      <Circle cx="70" cy="48" r="8" fill="#2563EB" />
-      <Circle cx="70" cy="45" r="3.5" fill="white" />
-      <Path d="M63 55 Q70 50 77 55" fill="white" />
+        {/* Linhas de documento */}
+        <View style={naStyles.docLinesFull} />
+        <View style={naStyles.docLinesMid} />
 
-      {/* Document lines */}
-      <Rect x="44" y="68" width="32" height="4" rx="2" fill="#C0C9D9" />
-      <Rect x="44" y="76" width="24" height="4" rx="2" fill="#D0D8E8" />
+        {/* Linha de item com check */}
+        <View style={naStyles.docItemRow}>
+          <View style={naStyles.docCheckGreen}>
+            <Feather name="check" size={9} color="#fff" />
+          </View>
+          <View style={naStyles.docLineShort} />
+        </View>
+        <View style={naStyles.docItemRow}>
+          <View style={naStyles.docCheckGreen}>
+            <Feather name="check" size={9} color="#fff" />
+          </View>
+          <View style={naStyles.docLineShort} />
+        </View>
+        <View style={naStyles.docItemRow}>
+          <View style={naStyles.docCheckOrange}>
+            <Feather name="clock" size={9} color="#fff" />
+          </View>
+          <View style={[naStyles.docLineShort, { width: 48 }]} />
+        </View>
+      </View>
 
-      {/* Checkmarks */}
-      <Path d="M44 86 L47 89 L53 83" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <Path d="M58 86 L61 89 L67 83" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      {/* Badge escudo verde — canto inferior esquerdo */}
+      <View style={naStyles.badgeShield}>
+        <LinearGradient colors={["#34C759","#28A846"]} style={naStyles.badgeGrad}>
+          <Feather name="shield" size={14} color="#fff" />
+        </LinearGradient>
+      </View>
 
-      {/* Shield */}
-      <G transform="translate(24, 68)">
-        <Path d="M16 0 L32 6 L32 20 C32 28 16 36 16 36 C16 36 0 28 0 20 L0 6 Z" fill="url(#shieldGrad)" />
-        <Path d="M8 18 L13 23 L24 12" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      </G>
+      {/* Badge lupa azul — canto superior direito */}
+      <View style={naStyles.badgeLupa}>
+        <LinearGradient colors={["#00C4FF","#2563EB"]} style={naStyles.badgeGrad}>
+          <Feather name="search" size={14} color="#fff" />
+        </LinearGradient>
+      </View>
 
-      {/* Magnifying glass */}
-      <G transform="translate(88, 62)">
-        <Circle cx="14" cy="14" r="13" fill="url(#loopGrad)" />
-        <Circle cx="14" cy="14" r="9" fill="none" stroke="white" strokeWidth="3" />
-        <Line x1="21" y1="21" x2="28" y2="28" stroke="url(#loopGrad)" strokeWidth="4" strokeLinecap="round" />
-        <Line x1="21" y1="21" x2="28" y2="28" stroke="#1E40AF" strokeWidth="4" strokeLinecap="round" />
-      </G>
-
-      {/* Sparkle stars */}
-      <G opacity="0.9">
-        {/* Top left star */}
-        <Path d="M22 28 L24 22 L26 28 L32 30 L26 32 L24 38 L22 32 L16 30 Z" fill="#4F8EF7" opacity="0.7" />
-        {/* Top right star */}
-        <Path d="M108 18 L109.5 14 L111 18 L115 19.5 L111 21 L109.5 25 L108 21 L104 19.5 Z" fill="#00C4FF" opacity="0.7" />
-        {/* Small dot accents */}
-        <Circle cx="30" cy="55" r="2.5" fill="#34C759" opacity="0.6" />
-        <Circle cx="112" cy="48" r="2" fill="#4F8EF7" opacity="0.5" />
-        <Circle cx="118" cy="70" r="1.5" fill="#00C4FF" opacity="0.4" />
-      </G>
-    </Svg>
+      {/* Estrelinhas decorativas */}
+      <View style={[naStyles.star, { top: 0, left: 10, width: 8, height: 8, borderRadius: 2, backgroundColor: "#4F8EF7", opacity: 0.8 }]} />
+      <View style={[naStyles.star, { top: 8, right: 4, width: 5, height: 5, borderRadius: 1, backgroundColor: "#00C4FF", opacity: 0.6 }]} />
+      <View style={[naStyles.star, { bottom: 20, right: 14, width: 6, height: 6, borderRadius: 1, backgroundColor: "#4F8EF7", opacity: 0.5 }]} />
+      <View style={[naStyles.star, { bottom: 30, left: 2, width: 4, height: 4, borderRadius: 1, backgroundColor: "#34C759", opacity: 0.7 }]} />
+    </Animated.View>
   );
 }
+
+const naStyles = StyleSheet.create({
+  illRoot: { width: 160, height: 170, alignItems: "center", justifyContent: "center" },
+  glowOrb: {
+    position: "absolute", width: 130, height: 130, borderRadius: 65,
+    backgroundColor: "#00C4FF", opacity: 0.08,
+    shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 40, elevation: 0,
+  },
+  docCard: {
+    width: 100, height: 130, borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center", paddingTop: 22, paddingHorizontal: 12,
+    gap: 7,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35, shadowRadius: 18, elevation: 14,
+  },
+  clipTop: {
+    position: "absolute", top: -10,
+    width: 40, height: 20, borderRadius: 6,
+    backgroundColor: "#2563EB",
+    alignItems: "center", justifyContent: "center",
+  },
+  clipHole: { width: 18, height: 8, borderRadius: 4, backgroundColor: "#1A3A8F" },
+  avatarRing: {
+    width: 46, height: 46, borderRadius: 23,
+    borderWidth: 3, borderColor: "#E8F0FE",
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#EEF2FF",
+  },
+  avatarInner: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: "#2563EB",
+    alignItems: "center", justifyContent: "center",
+  },
+  docLinesFull: { width: 68, height: 5, borderRadius: 3, backgroundColor: "#E2E8F0" },
+  docLinesMid: { width: 52, height: 5, borderRadius: 3, backgroundColor: "#EDF2F7" },
+  docItemRow: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
+  docCheckGreen: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#34C759", alignItems: "center", justifyContent: "center" },
+  docCheckOrange: { width: 16, height: 16, borderRadius: 8, backgroundColor: "#FF9500", alignItems: "center", justifyContent: "center" },
+  docLineShort: { width: 36, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0" },
+  badgeShield: {
+    position: "absolute", bottom: 18, left: 0,
+    borderRadius: 20, overflow: "hidden",
+    shadowColor: "#34C759", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 8, elevation: 8,
+  },
+  badgeLupa: {
+    position: "absolute", top: 8, right: 0,
+    borderRadius: 20, overflow: "hidden",
+    shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 8, elevation: 8,
+  },
+  badgeGrad: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  star: { position: "absolute", transform: [{ rotate: "45deg" }] },
+});
 
 export default function DriverHomeScreen() {
   const { user } = useAuth();
@@ -147,6 +199,22 @@ export default function DriverHomeScreen() {
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
   const [showNotApprovedModal, setShowNotApprovedModal] = useState(false);
+  const floatAnim = useRef(new Animated.Value(0)).current;
+
+  // Floating animation for modal illustration
+  useEffect(() => {
+    if (showNotApprovedModal) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(floatAnim, { toValue: -10, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
+          Animated.timing(floatAnim, { toValue: 0, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
+        ])
+      ).start();
+    } else {
+      floatAnim.stopAnimation();
+      floatAnim.setValue(0);
+    }
+  }, [showNotApprovedModal]);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const dotAnim = useRef(new Animated.Value(0)).current;
@@ -772,14 +840,43 @@ export default function DriverHomeScreen() {
         onRequestClose={() => setShowNotApprovedModal(false)}
       >
         <View style={styles.naOverlay}>
-          <View style={[styles.naCard, { backgroundColor: "#12213A", borderColor: "rgba(79,142,247,0.18)" }]}>
-            {/* Illustration */}
+          <LinearGradient
+            colors={["#0F1E38", "#0D1628", "#080E1C"]}
+            style={[styles.naCard, { borderColor: "rgba(0,196,255,0.15)" }]}
+          >
+            {/* Glow topo */}
+            <View style={styles.naTopGlow} />
+
+            {/* Ilustração animada */}
             <View style={styles.naIllustration}>
-              <NotApprovedIllustration />
+              <NotApprovedIllustration
+                floatY={floatAnim.interpolate({ inputRange: [-10, 0], outputRange: [-10, 0] })}
+              />
             </View>
 
             {/* Content */}
             <Text style={styles.naTitle}>Conta em Análise</Text>
+
+            {/* Barra de progresso de 3 passos */}
+            <View style={styles.naStepsRow}>
+              <View style={styles.naStepDone}>
+                <Feather name="check" size={11} color="#fff" />
+              </View>
+              <View style={[styles.naStepLine, { backgroundColor: "#00C4FF" }]} />
+              <View style={[styles.naStepActive, { borderColor: "#00C4FF" }]}>
+                <View style={[styles.naStepActiveDot, { backgroundColor: "#00C4FF" }]} />
+              </View>
+              <View style={[styles.naStepLine, { backgroundColor: "rgba(255,255,255,0.15)" }]} />
+              <View style={styles.naStepPending}>
+                <Feather name="award" size={11} color="rgba(255,255,255,0.4)" />
+              </View>
+            </View>
+            <View style={styles.naStepsLabels}>
+              <Text style={styles.naStepLabelDone}>Enviado</Text>
+              <Text style={styles.naStepLabelActive}>Em análise</Text>
+              <Text style={styles.naStepLabelPending}>Aprovado</Text>
+            </View>
+
             <Text style={styles.naDesc}>
               Estamos revisando seus documentos.{"
 "}Em breve você poderá começar a dirigir!
@@ -787,18 +884,24 @@ export default function DriverHomeScreen() {
 
             {/* Verificar Status button */}
             <TouchableOpacity
-              style={styles.naVerifyBtn}
               onPress={() => {
                 setShowNotApprovedModal(false);
                 router.push("/(driver)/upload-documents");
               }}
               activeOpacity={0.85}
+              style={styles.naVerifyOuter}
             >
-              <View style={styles.naVerifyIcon}>
-                <Feather name="activity" size={16} color="#fff" />
-              </View>
-              <Text style={styles.naVerifyText}>Verificar Status</Text>
-              <Feather name="arrow-right" size={16} color="#fff" />
+              <LinearGradient
+                colors={["#00C4FF", "#1A6AFF"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={styles.naVerifyBtn}
+              >
+                <View style={styles.naVerifyIcon}>
+                  <Feather name="activity" size={16} color="#fff" />
+                </View>
+                <Text style={styles.naVerifyText}>Verificar Status</Text>
+                <Feather name="arrow-right" size={16} color="rgba(255,255,255,0.8)" />
+              </LinearGradient>
             </TouchableOpacity>
 
             {/* Entendido button */}
@@ -954,30 +1057,37 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", padding: 24,
   },
   naCard: {
-    width: "100%", borderRadius: 28, borderWidth: 1,
-    paddingHorizontal: 28, paddingTop: 32, paddingBottom: 28,
-    alignItems: "center", gap: 0,
-    shadowColor: "#4F8EF7", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3, shadowRadius: 24, elevation: 20,
+    width: "100%", borderRadius: 32, borderWidth: 1,
+    paddingHorizontal: 28, paddingTop: 40, paddingBottom: 28,
+    alignItems: "center", gap: 0, overflow: "hidden",
+    shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4, shadowRadius: 30, elevation: 24,
   },
-  naIllustration: { marginBottom: 20, alignItems: "center" },
+  naTopGlow: {
+    position: "absolute", top: -60, left: "10%", right: "10%",
+    height: 120, borderRadius: 60,
+    backgroundColor: "#00C4FF", opacity: 0.07,
+  },
+  naIllustration: { marginBottom: 24, alignItems: "center" },
   naTitle: {
-    fontSize: 24, fontFamily: "Inter_700Bold",
+    fontSize: 26, fontFamily: "Inter_700Bold",
     color: "#FFFFFF", textAlign: "center", marginBottom: 10,
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
   },
   naDesc: {
     fontSize: 14, fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.55)", textAlign: "center",
+    color: "rgba(200,220,255,0.65)", textAlign: "center",
     lineHeight: 22, marginBottom: 28,
   },
+  naVerifyOuter: {
+    width: "100%", marginBottom: 12,
+    shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5, shadowRadius: 16, elevation: 10,
+  },
   naVerifyBtn: {
-    width: "100%", height: 54, borderRadius: 16,
-    backgroundColor: "#2563EB",
+    width: "100%", height: 56, borderRadius: 16,
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 20, gap: 12, marginBottom: 12,
-    shadowColor: "#2563EB", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+    paddingHorizontal: 20, gap: 12,
   },
   naVerifyIcon: {
     width: 28, height: 28, borderRadius: 8,
@@ -1002,4 +1112,31 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: 16, fontFamily: "Inter_500Medium",
     color: "rgba(255,255,255,0.75)",
   },
+
+  // Step progress bar
+  naStepsRow: {
+    flexDirection: "row", alignItems: "center", marginBottom: 6, width: "80%",
+  },
+  naStepDone: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: "#34C759", alignItems: "center", justifyContent: "center",
+  },
+  naStepActive: {
+    width: 26, height: 26, borderRadius: 13,
+    borderWidth: 2, alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(0,196,255,0.1)",
+  },
+  naStepActiveDot: { width: 10, height: 10, borderRadius: 5 },
+  naStepPending: {
+    width: 26, height: 26, borderRadius: 13,
+    backgroundColor: "rgba(255,255,255,0.07)", alignItems: "center", justifyContent: "center",
+  },
+  naStepLine: { flex: 1, height: 2, marginHorizontal: 4 },
+  naStepsLabels: {
+    flexDirection: "row", width: "88%", justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  naStepLabelDone: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#34C759", textAlign: "center", flex: 1 },
+  naStepLabelActive: { fontSize: 10, fontFamily: "Inter_700Bold", color: "#00C4FF", textAlign: "center", flex: 1 },
+  naStepLabelPending: { fontSize: 10, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.35)", textAlign: "center", flex: 1 },
 });
