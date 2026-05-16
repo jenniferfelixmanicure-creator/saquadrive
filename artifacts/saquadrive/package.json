@@ -58,7 +58,6 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@maplibre/maplibre-react-native": "^11.2.1",
     "expo": "~54.0.34",
     "expo-device": "~55.0.17",
     "expo-notifications": "~55.0.23",
