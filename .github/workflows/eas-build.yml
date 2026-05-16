@@ -7,6 +7,10 @@ on:
       - 'artifacts/saquadrive/**'
   workflow_dispatch:
 
+concurrency:
+  group: apk-build
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build APK Android
@@ -54,4 +58,3 @@ jobs:
           name: zerorisco-preview.apk
           path: artifacts/saquadrive/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
-
