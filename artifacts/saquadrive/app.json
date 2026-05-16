@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "zerorisco",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "backgroundColor": "#0D0D0D",
     "androidStatusBar": {
       "barStyle": "light-content",
@@ -56,15 +56,6 @@
         "expo-location",
         {
           "locationAlwaysPermission": "Permita que o ZeroRisco acesse sua localização para encontrar corridas próximas."
-        }
-      ],
-      [
-        "@maplibre/maplibre-react-native",
-        {
-          "RNMapLibreGLLocationLayerEnabled": true,
-          "android": {
-            "styleURL": "https://tiles.openfreemap.org/styles/dark"
-          }
         }
       ]
     ],
