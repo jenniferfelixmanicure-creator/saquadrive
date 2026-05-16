@@ -102,6 +102,16 @@ async function runMigrations() {
       )
     `);
     logger.info("Migrations OK — todas as tabelas criadas/verificadas");
+
+    // Promoção automática de conta admin via ADMIN_EMAIL
+    // Defina ADMIN_EMAIL no Render para promover a conta na próxima inicialização
+    const adminEmail = process.env["ADMIN_EMAIL"];
+    if (adminEmail) {
+      await db.execute(
+        sql`UPDATE users SET role = 'admin', is_approved = true WHERE email = ${adminEmail}`
+      );
+      logger.info({ adminEmail }, "Conta promovida para admin via ADMIN_EMAIL");
+    }
   } catch (err) {
     logger.error({ err }, "Migration falhou");
   }
