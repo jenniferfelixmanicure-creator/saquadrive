@@ -152,8 +152,29 @@ export default function WelcomeScreen() {
 
   if (isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { backgroundColor: "#0D0D0D" }]}>
+        <Image
+          source={require("../assets/images/zerorisco_bg_futuristic.png")}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="cover"
+        />
+        <LinearGradient
+          colors={["rgba(13,13,13,0.45)", "rgba(13,13,13,0.82)", "#0D0D0D"]}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={styles.center}>
+          <Image
+            source={require("../assets/images/zerorisco_logo_futuristic.png")}
+            style={styles.splashLogo}
+            contentFit="contain"
+          />
+          <Text style={styles.splashTagline}>MOBILIDADE SAQUAREMA</Text>
+          <View style={styles.splashDots}>
+            <View style={[styles.splashDot, { backgroundColor: "#FF6B00" }]} />
+            <View style={[styles.splashDot, { backgroundColor: "rgba(255,107,0,0.45)" }]} />
+            <View style={[styles.splashDot, { backgroundColor: "rgba(255,107,0,0.18)" }]} />
+          </View>
+        </View>
       </View>
     );
   }
@@ -289,6 +310,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0D0D0D" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   inner: { flex: 1, paddingHorizontal: 22, justifyContent: "space-between" },
+
+  // Splash / loading
+  splashLogo: { width: 260, height: 160 },
+  splashTagline: {
+    fontSize: 11, fontFamily: "Inter_600SemiBold",
+    color: "#FF6B00", letterSpacing: 2.5,
+    textTransform: "uppercase", marginTop: 12,
+  },
+  splashDots: { flexDirection: "row", gap: 8, marginTop: 36 },
+  splashDot: { width: 8, height: 8, borderRadius: 4 },
 
   // Logo
   logoArea: { alignItems: "center", gap: 10 },
