@@ -84,6 +84,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { loadSession(); }, []);
 
   async function loadSession() {
+    function fetchWithTimeout(url: string, opts: RequestInit, ms = 8000): Promise<Response> {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ms);
+      return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+    }
+
     try {
       const [storedUser, storedToken, storedRefresh, storedMode] = await Promise.all([
         AsyncStorage.getItem(USER_KEY),
@@ -99,11 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const expiresIn = expiry ? expiry - Date.now() : 0;
         if (expiresIn < 24 * 60 * 60 * 1000) {
           try {
-            const res = await fetch(`${API_URL}/api/auth/refresh`, {
+            const res = await fetchWithTimeout(`${API_URL}/api/auth/refresh`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ refreshToken: storedRefresh }),
-            });
+            }, 8000);
             if (res.ok) {
               const data = await res.json() as { token: string; refreshToken: string };
               activeToken = data.token;
@@ -186,9 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       phone: data.user.phone,
       isApproved: data.user.isApproved,
       rgStatus: data.user.rgStatus as User["rgStatus"],
-      driverRating: 5.0,
       passengerRating: 5.0,
-      totalRides: 0,
       profilePhotoUrl: data.user.profilePhotoUrl,
     };
 
@@ -201,6 +205,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshToken(data.refreshToken);
     }
     await Promise.all(saves);
+    // Fetch full profile from API to get driver fields
+    try {
+      const profileRes = await fetchWithTimeout(`${API_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${data.token}` },
+      }, 8000);
+      if (profileRes.ok) {
+        const profile = await profileRes.json() as Partial<User>;
+        Object.assign(userData, {
+          driverRating: profile.driverRating,
+          totalRides: profile.totalRides,
+          cnhStatus: profile.cnhStatus,
+          crlvStatus: profile.crlvStatus,
+          rgStatus: profile.rgStatus ?? userData.rgStatus,
+          vehiclePlate: profile.vehiclePlate,
+          vehicleModel: profile.vehicleModel,
+        });
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+      }
+    } catch { /* silencioso */ }
     setUser(userData);
     setToken(data.token);
   }
@@ -221,9 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       phone: data.user.phone,
       isApproved: data.user.isApproved,
       rgStatus: data.user.rgStatus as User["rgStatus"],
-      driverRating: 5.0,
       passengerRating: 5.0,
-      totalRides: 0,
       profilePhotoUrl: data.user.profilePhotoUrl,
     };
 
@@ -236,6 +257,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshToken(data.refreshToken);
     }
     await Promise.all(saves);
+    // Fetch full profile from API to get driver fields
+    try {
+      const profileRes = await fetchWithTimeout(`${API_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${data.token}` },
+      }, 8000);
+      if (profileRes.ok) {
+        const profile = await profileRes.json() as Partial<User>;
+        Object.assign(userData, {
+          driverRating: profile.driverRating,
+          totalRides: profile.totalRides,
+          cnhStatus: profile.cnhStatus,
+          crlvStatus: profile.crlvStatus,
+          rgStatus: profile.rgStatus ?? userData.rgStatus,
+          vehiclePlate: profile.vehiclePlate,
+          vehicleModel: profile.vehicleModel,
+        });
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
+      }
+    } catch { /* silencioso */ }
     setUser(userData);
     setToken(data.token);
   }
