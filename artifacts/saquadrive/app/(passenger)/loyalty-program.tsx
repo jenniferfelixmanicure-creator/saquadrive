@@ -13,7 +13,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useRide } from "@/contexts/RideContext";
 import { useColors } from "@/hooks/useColors";
 
 const TIERS = [
@@ -27,10 +26,10 @@ export default function LoyaltyProgramScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const { history } = useRide();
   const { user } = useAuth();
 
-  const totalRides = history.length;
+  // Usa totalRides do servidor (perfil do usuário) — mais preciso que o histórico local
+  const totalRides = (user as { totalRides?: number } | null)?.totalRides ?? 0;
 
   const currentTier = TIERS.reduce((acc, tier) => {
     if (totalRides >= tier.minRides) return tier;
@@ -45,7 +44,6 @@ export default function LoyaltyProgramScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
@@ -55,11 +53,7 @@ export default function LoyaltyProgramScreen() {
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
-        {/* Card do nível atual */}
-        <LinearGradient
-          colors={["#0D1A2E", "#1a2a3a"]}
-          style={styles.tierCard}
-        >
+        <LinearGradient colors={["#0D1A2E", "#1a2a3a"]} style={styles.tierCard}>
           <View style={styles.tierTop}>
             <View style={[styles.tierIcon, { backgroundColor: currentTier.color + "33", borderColor: currentTier.color + "66" }]}>
               <Feather name="award" size={30} color={currentTier.color} />
@@ -78,31 +72,34 @@ export default function LoyaltyProgramScreen() {
           {nextTier && (
             <View style={styles.progressSection}>
               <View style={styles.progressLabelRow}>
-                <Text style={styles.progressLabel}>Próximo nível: <Text style={{ color: nextTier.color }}>{nextTier.name}</Text></Text>
-                <Text style={styles.progressLabel}>{ridesUntilNext} corridas restantes</Text>
+                <Text style={styles.progressLabel}>
+                  Próximo nível: <Text style={{ color: nextTier.color }}>{nextTier.name}</Text>
+                </Text>
+                <Text style={styles.progressLabel}>{ridesUntilNext} restantes</Text>
               </View>
               <View style={styles.progressTrack}>
-                <View style={[styles.progressFill, { width: `${progressPct}%` as `${number}%`, backgroundColor: currentTier.color }]} />
+                <View style={[styles.progressFill, { width: `${Math.round(progressPct)}%` as `${number}%`, backgroundColor: currentTier.color }]} />
               </View>
             </View>
           )}
           {!nextTier && (
-            <Text style={styles.maxTierText}>Você alcançou o nível máximo! 🎉</Text>
+            <Text style={styles.maxTierText}>Você alcançou o nível máximo!</Text>
           )}
         </LinearGradient>
 
-        {/* Benefícios do nível atual */}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>SEUS BENEFÍCIOS AGORA</Text>
           {currentTier.perks.map((perk, idx) => (
-            <View key={idx} style={[styles.perkRow, { borderBottomColor: colors.border, borderBottomWidth: idx < currentTier.perks.length - 1 ? 1 : 0 }]}>
+            <View
+              key={idx}
+              style={[styles.perkRow, { borderBottomColor: colors.border, borderBottomWidth: idx < currentTier.perks.length - 1 ? 1 : 0 }]}
+            >
               <View style={[styles.perkDot, { backgroundColor: currentTier.color }]} />
               <Text style={[styles.perkText, { color: colors.foreground }]}>{perk}</Text>
             </View>
           ))}
         </View>
 
-        {/* Todos os níveis */}
         <Text style={[styles.allLevelsTitle, { color: colors.foreground }]}>Todos os níveis</Text>
         {TIERS.map((tier) => {
           const isActive = tier.name === currentTier.name;
