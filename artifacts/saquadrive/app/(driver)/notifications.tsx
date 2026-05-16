@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Platform, ScrollView, StyleSheet, Switch,
   Text, TouchableOpacity, View,
@@ -9,6 +10,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+
+const PREFS_KEY = "notif_prefs_driver";
+
+const DEFAULT_PREFS: Record<string, boolean> = {
+  ride_request: true,
+  ride_cancelled: true,
+  payment: true,
+  chat_message: true,
+  rating: true,
+  goals: true,
+  promotions: false,
+};
 
 type NotifItem = {
   key: string;
@@ -32,19 +45,26 @@ export default function DriverNotificationsScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const [prefs, setPrefs] = useState<Record<string, boolean>>({
-    ride_request: true,
-    ride_cancelled: true,
-    payment: true,
-    chat_message: true,
-    rating: true,
-    goals: true,
-    promotions: false,
-  });
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(DEFAULT_PREFS);
+
+  useEffect(() => {
+    AsyncStorage.getItem(PREFS_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw) as Record<string, boolean>;
+          setPrefs({ ...DEFAULT_PREFS, ...saved });
+        } catch { /* usa defaults */ }
+      }
+    });
+  }, []);
 
   function toggle(key: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+    setPrefs((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next));
+      return next;
+    });
   }
 
   const rideItems = NOTIF_ITEMS.filter((i) => i.key !== "promotions");
@@ -64,7 +84,7 @@ export default function DriverNotificationsScreen() {
         <View style={[styles.infoBanner, { backgroundColor: "#00C4FF18", borderColor: "#00C4FF44" }]}>
           <Feather name="bell" size={16} color="#00C4FF" />
           <Text style={[styles.infoText, { color: "#00C4FF" }]}>
-            Ative as notificações para não perder nenhuma corrida disponível.
+            Ative as notificações para não perder nenhuma corrida. Suas preferências são salvas automaticamente.
           </Text>
         </View>
 
