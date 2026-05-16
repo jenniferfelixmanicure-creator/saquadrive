@@ -145,7 +145,7 @@ export default function WelcomeScreen() {
   const [loadingTimedOut, setLoadingTimedOut] = React.useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoadingTimedOut(true), 10000);
+    const timer = setTimeout(() => setLoadingTimedOut(true), 4000);
     return () => clearTimeout(timer);
   }, []);
 
