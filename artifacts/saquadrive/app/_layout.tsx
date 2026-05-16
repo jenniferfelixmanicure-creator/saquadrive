@@ -11,7 +11,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as NavigationBar from "expo-navigation-bar";
 import { Platform } from "react-native";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { registerForPushNotificationsAsync } from "@/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -22,7 +22,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
 
@@ -48,22 +48,33 @@ export default function RootLayout() {
     ...Feather.font,
   });
 
+  const [splashHidden, setSplashHidden] = useState(false);
+
   useEffect(() => {
+    const timeout = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+      setSplashHidden(true);
+    }, 4000);
+
     if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
+      clearTimeout(timeout);
+      SplashScreen.hideAsync().catch(() => {});
+      setSplashHidden(true);
     }
+
+    return () => clearTimeout(timeout);
   }, [fontsLoaded, fontError]);
 
   useEffect(() => {
     registerForPushNotificationsAsync();
     if (Platform.OS === "android") {
-      NavigationBar.setVisibilityAsync("hidden");
-      NavigationBar.setBehaviorAsync("overlay-swipe");
-      NavigationBar.setBackgroundColorAsync("#00000000");
+      NavigationBar.setVisibilityAsync("hidden").catch(() => {});
+      NavigationBar.setBehaviorAsync("overlay-swipe").catch(() => {});
+      NavigationBar.setBackgroundColorAsync("#00000000").catch(() => {});
     }
   }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!splashHidden) return null;
 
   return (
     <SafeAreaProvider>
