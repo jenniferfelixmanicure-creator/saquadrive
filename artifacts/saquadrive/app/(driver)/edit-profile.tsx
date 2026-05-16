@@ -1,19 +1,30 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { API_URL } from "@/constants/api";
 
 export default function DriverEditProfileScreen() {
   const colors = useColors();
-  const { user, updateUser } = useAuth();
+  const { user, token, updateUser, updateUserDocuments } = useAuth();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -22,7 +33,82 @@ export default function DriverEditProfileScreen() {
   const [vehicleModel, setVehicleModel] = useState(user?.vehicleModel ?? "");
   const [vehiclePlate, setVehiclePlate] = useState(user?.vehiclePlate ?? "");
   const [loading, setLoading] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const initials = name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "M";
+
+  async function handlePickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permissão necessária", "Precisamos de acesso à sua galeria para escolher uma foto.");
+      return;
+    }
+
+    Alert.alert("Foto de perfil", "Escolha uma opção", [
+      {
+        text: "Galeria",
+        onPress: async () => {
+          const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) {
+            await uploadPhoto(result.assets[0]);
+          }
+        },
+      },
+      {
+        text: "Câmera",
+        onPress: async () => {
+          const camStatus = await ImagePicker.requestCameraPermissionsAsync();
+          if (camStatus.status !== "granted") {
+            Alert.alert("Permissão necessária", "Precisamos de acesso à câmera.");
+            return;
+          }
+          const result = await ImagePicker.launchCameraAsync({
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.8,
+          });
+          if (!result.canceled && result.assets[0]) {
+            await uploadPhoto(result.assets[0]);
+          }
+        },
+      },
+      { text: "Cancelar", style: "cancel" },
+    ]);
+  }
+
+  async function uploadPhoto(asset: ImagePicker.ImagePickerAsset) {
+    setPhotoLoading(true);
+    try {
+      const filename = asset.uri.split("/").pop() ?? "photo.jpg";
+      const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
+      const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+      const formData = new FormData();
+      formData.append("photo", { uri: asset.uri, name: filename, type: mimeType } as unknown as Blob);
+
+      const res = await fetch(`${API_URL}/api/documents/upload-profile-photo`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const data = await res.json() as { profilePhotoUrl?: string; message?: string };
+      if (!res.ok) throw new Error(data.message ?? "Erro ao enviar foto");
+
+      await updateUserDocuments({ profilePhotoUrl: data.profilePhotoUrl });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Não foi possível atualizar a foto.");
+    } finally {
+      setPhotoLoading(false);
+    }
+  }
 
   async function handleSave() {
     if (!name.trim()) {
@@ -48,6 +134,12 @@ export default function DriverEditProfileScreen() {
     }
   }
 
+  const photoUri = user?.profilePhotoUrl
+    ? user.profilePhotoUrl.startsWith("/uploads/")
+      ? `${API_URL}${user.profilePhotoUrl}`
+      : user.profilePhotoUrl
+    : null;
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
@@ -63,11 +155,25 @@ export default function DriverEditProfileScreen() {
 
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
         <View style={styles.avatarSection}>
-          <View style={[styles.avatar, { backgroundColor: "#00C4FF33", borderColor: "#00C4FF44", borderWidth: 2 }]}>
-            <Text style={[styles.avatarText, { color: "#00C4FF" }]}>
-              {name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "M"}
-            </Text>
-          </View>
+          <TouchableOpacity onPress={handlePickPhoto} activeOpacity={0.8} style={styles.avatarWrapper}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: "#00C4FF33", borderColor: "#00C4FF44", borderWidth: 2 }]}>
+                <Text style={[styles.avatarText, { color: "#00C4FF" }]}>{initials}</Text>
+              </View>
+            )}
+            {photoLoading ? (
+              <View style={[styles.avatarOverlay, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+                <ActivityIndicator color="#fff" />
+              </View>
+            ) : (
+              <View style={[styles.cameraBtn, { backgroundColor: "#00C4FF" }]}>
+                <Feather name="camera" size={14} color="#fff" />
+              </View>
+            )}
+          </TouchableOpacity>
+          <Text style={[styles.photoHint, { color: colors.mutedForeground }]}>Toque para alterar a foto</Text>
         </View>
 
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -154,9 +260,22 @@ const styles = StyleSheet.create({
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   content: { padding: 16, gap: 16 },
-  avatarSection: { alignItems: "center", paddingVertical: 16 },
-  avatar: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 28, fontFamily: "Inter_700Bold" },
+  avatarSection: { alignItems: "center", paddingVertical: 20, gap: 8 },
+  avatarWrapper: { position: "relative", width: 88, height: 88 },
+  avatar: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
+  avatarImage: { width: 88, height: 88, borderRadius: 44 },
+  avatarText: { fontSize: 30, fontFamily: "Inter_700Bold" },
+  avatarOverlay: {
+    position: "absolute", top: 0, left: 0, width: 88, height: 88,
+    borderRadius: 44, alignItems: "center", justifyContent: "center",
+  },
+  cameraBtn: {
+    position: "absolute", bottom: 0, right: 0,
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: "#fff",
+  },
+  photoHint: { fontSize: 12, fontFamily: "Inter_400Regular" },
   section: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 16 },
   sectionTitle: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.8, textTransform: "uppercase" },
   fieldGroup: { gap: 6 },

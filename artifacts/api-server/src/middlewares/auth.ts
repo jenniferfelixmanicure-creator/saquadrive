@@ -1,8 +1,12 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env["JWT_SECRET"] ?? "zerorisco_dev_secret_change_in_prod";
-const JWT_REFRESH_SECRET = process.env["JWT_REFRESH_SECRET"] ?? "zerorisco_refresh_secret_change_in_prod";
+const JWT_SECRET = process.env["JWT_SECRET"];
+const JWT_REFRESH_SECRET = process.env["JWT_REFRESH_SECRET"];
+
+if (!JWT_SECRET || !JWT_REFRESH_SECRET) {
+  throw new Error("JWT_SECRET e JWT_REFRESH_SECRET devem ser definidos nas variáveis de ambiente");
+}
 
 export interface AuthRequest extends Request {
   userId?: number;

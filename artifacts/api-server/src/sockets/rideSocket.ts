@@ -5,10 +5,9 @@ import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env["JWT_SECRET"] ?? "zerorisco_dev_secret_change_in_prod";
-
-if (!process.env["JWT_SECRET"]) {
-  logger.warn("JWT_SECRET não definido — usando segredo padrão (INSEGURO em produção)");
+const JWT_SECRET = process.env["JWT_SECRET"];
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET deve ser definido nas variáveis de ambiente");
 }
 
 // Preços por km por tipo de corrida (fonte única de verdade — no servidor)
@@ -465,6 +464,15 @@ export function registerRideSocket(io: Server) {
       const active = activeRides.get(rideId);
       if (!active) return;
 
+      // Verificar que quem envia é realmente participante desta corrida
+      const isParticipant =
+        socket.id === active.passengerSocketId ||
+        socket.id === active.driverSocketId;
+      if (!isParticipant) {
+        logger.warn({ rideId, senderId, socketId: socket.id }, "Tentativa de chat por não-participante bloqueada");
+        return;
+      }
+
       const msg: ChatMessage = { msgId, senderId, senderName, text, timestamp: Date.now() };
 
       try {
@@ -481,9 +489,18 @@ export function registerRideSocket(io: Server) {
     socket.on("ride:emergency", ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
-      logger.warn({ rideId }, "EMERGÊNCIA SOS ativado");
+      logger.warn({ rideId }, "EMERGÊNCIA SOS ativado pelo passageiro");
       io.to(active.driverSocketId).emit("ride:emergency_alert", { rideId });
       io.to(active.passengerSocketId).emit("ride:emergency_confirmed", { rideId });
+    });
+
+    // SOS emitido pelo motorista — mesma lógica do passageiro
+    socket.on("driver:sos", ({ rideId }: { rideId: string }) => {
+      const active = activeRides.get(rideId);
+      if (!active) return;
+      logger.warn({ rideId }, "EMERGÊNCIA SOS ativado pelo motorista");
+      io.to(active.passengerSocketId).emit("ride:emergency_alert", { rideId });
+      io.to(active.driverSocketId).emit("ride:emergency_confirmed", { rideId });
     });
 
     socket.on("disconnect", () => {

@@ -26,6 +26,7 @@ export type User = {
   isApproved?: boolean;
   subscriptionActive?: boolean;
   subscriptionExpiresAt?: string;
+  profilePhotoUrl?: string;
 };
 
 type AuthContextType = {
@@ -68,6 +69,7 @@ type AuthResponse = {
     phone: string;
     isApproved: boolean;
     rgStatus: string;
+    profilePhotoUrl?: string;
   };
 };
 
@@ -92,7 +94,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       let activeToken = storedToken;
 
-      // Auto-renovar token se estiver expirando em menos de 24h
       if (storedToken && storedRefresh) {
         const expiry = decodeJwtExpiry(storedToken);
         const expiresIn = expiry ? expiry - Date.now() : 0;
@@ -130,7 +131,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Wrapper de fetch que renova o token automaticamente em caso de 401
   async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
     const headers: Record<string, string> = {
       ...(options.headers as Record<string, string> ?? {}),
@@ -155,11 +155,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             AsyncStorage.setItem(TOKEN_KEY, data.token),
             AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken),
           ]);
-          // Repetir a requisição original com o novo token
           headers["Authorization"] = `Bearer ${data.token}`;
           res = await fetch(`${API_URL}${path}`, { ...options, headers });
         } else {
-          // Refresh falhou — deslogar
           await logout();
         }
       } catch {
@@ -191,6 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       driverRating: 5.0,
       passengerRating: 5.0,
       totalRides: 0,
+      profilePhotoUrl: data.user.profilePhotoUrl,
     };
 
     const saves = [
@@ -225,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       driverRating: 5.0,
       passengerRating: 5.0,
       totalRides: 0,
+      profilePhotoUrl: data.user.profilePhotoUrl,
     };
 
     const saves = [

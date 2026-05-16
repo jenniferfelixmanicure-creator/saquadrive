@@ -61,11 +61,6 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       const newAvg = result[0]?.avg ?? "5.0";
       await db.update(driversTable).set({ rating: String(newAvg) }).where(eq(driversTable.userId, ratedId));
 
-      await db.update(driversTable)
-        .set({ totalRides: sql`${driversTable.totalRides} + 1` })
-        .where(eq(driversTable.userId, ratedId))
-        .catch(() => {});
-
       // Atualizar status da corrida com a avaliação do passageiro
       await db.update(ridesTable).set({ passengerRating: stars }).where(eq(ridesTable.id, rideId));
     } else {

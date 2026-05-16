@@ -27,7 +27,7 @@ jobs:
           version: 9
 
       - name: Instalar dependências
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Configurar Java 17
         uses: actions/setup-java@v4

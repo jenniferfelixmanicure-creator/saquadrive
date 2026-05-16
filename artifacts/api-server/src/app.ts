@@ -22,7 +22,11 @@ app.use(
   }),
 );
 
-app.use(cors({ origin: "*", methods: ["GET", "POST", "PUT", "DELETE", "PATCH"] }));
+const allowedOrigins = process.env["CORS_ORIGINS"]
+  ? process.env["CORS_ORIGINS"].split(",").map((o) => o.trim())
+  : true;
+
+app.use(cors({ origin: allowedOrigins, methods: ["GET", "POST", "PUT", "DELETE", "PATCH"] }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 

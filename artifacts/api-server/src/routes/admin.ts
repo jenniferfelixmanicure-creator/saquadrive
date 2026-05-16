@@ -7,7 +7,10 @@ import { eq, and, count, desc } from "drizzle-orm";
 
 const router = Router();
 
-const ADMIN_SECRET = process.env["ADMIN_SECRET"] ?? "saquadrive_admin_2025";
+const ADMIN_SECRET = process.env["ADMIN_SECRET"];
+if (!ADMIN_SECRET) {
+  throw new Error("ADMIN_SECRET deve ser definido nas variáveis de ambiente");
+}
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const secret = req.headers["x-admin-secret"] as string | undefined;
