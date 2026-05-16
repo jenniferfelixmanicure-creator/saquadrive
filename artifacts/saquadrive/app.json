@@ -57,6 +57,14 @@
         {
           "locationAlwaysPermission": "Permita que o ZeroRisco acesse sua localização para encontrar corridas próximas."
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "zerorisco",
+          "project": "zerorisco-saquarema",
+          "uploadSourceMaps": false
+        }
       ]
     ],
     "owner": "zerorisco",
