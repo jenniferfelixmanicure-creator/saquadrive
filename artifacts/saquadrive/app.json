@@ -41,7 +41,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0D0D0D"
-      },
+      }
     },
     "ios": {
       "supportsTablet": false,
@@ -63,7 +63,7 @@
         {
           "RNMapLibreGLLocationLayerEnabled": true,
           "android": {
-            "styleURL": "https://tiles.openfreemap.org/styles/liberty"
+            "styleURL": "https://tiles.openfreemap.org/styles/dark"
           }
         }
       ]
