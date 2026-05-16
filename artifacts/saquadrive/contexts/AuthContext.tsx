@@ -59,6 +59,12 @@ function decodeJwtExpiry(token: string): number | null {
   }
 }
 
+function fetchWithTimeout(url: string, opts: RequestInit, ms = 8000): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 type AuthResponse = {
   token: string;
   refreshToken?: string;
@@ -84,12 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { loadSession(); }, []);
 
   async function loadSession() {
-    function fetchWithTimeout(url: string, opts: RequestInit, ms = 8000): Promise<Response> {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), ms);
-      return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
-    }
-
     try {
       const [storedUser, storedToken, storedRefresh, storedMode] = await Promise.all([
         AsyncStorage.getItem(USER_KEY),
@@ -118,9 +118,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken),
               ]);
               setRefreshToken(data.refreshToken);
+            } else {
+              await Promise.all([
+                AsyncStorage.removeItem(TOKEN_KEY),
+                AsyncStorage.removeItem(REFRESH_TOKEN_KEY),
+                AsyncStorage.removeItem(USER_KEY),
+                AsyncStorage.removeItem(MODE_KEY),
+              ]);
+              return;
             }
           } catch {
-            // falha silenciosa — continua com token existente
+            // Erro de rede/timeout — mantém token existente para tentar offline
           }
         } else {
           setRefreshToken(storedRefresh);
@@ -177,11 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function login(email: string, password: string) {
-    const res = await fetch(`${API_URL}/api/auth/login`, {
+    const res = await fetchWithTimeout(`${API_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }),
-    });
+    }, 15000);
     const data = await res.json() as AuthResponse & { message?: string };
     if (!res.ok) throw new Error(data.message ?? "Erro desconhecido");
 
@@ -205,7 +213,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshToken(data.refreshToken);
     }
     await Promise.all(saves);
-    // Fetch full profile from API to get driver fields
     try {
       const profileRes = await fetchWithTimeout(`${API_URL}/api/users/me`, {
         headers: { Authorization: `Bearer ${data.token}` },
@@ -229,11 +236,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function register(name: string, email: string, phone: string, password: string) {
-    const res = await fetch(`${API_URL}/api/auth/register`, {
+    const res = await fetchWithTimeout(`${API_URL}/api/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, phone, password }),
-    });
+    }, 15000);
     const data = await res.json() as AuthResponse & { message?: string };
     if (!res.ok) throw new Error(data.message ?? "Erro desconhecido");
 
@@ -257,7 +264,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRefreshToken(data.refreshToken);
     }
     await Promise.all(saves);
-    // Fetch full profile from API to get driver fields
     try {
       const profileRes = await fetchWithTimeout(`${API_URL}/api/users/me`, {
         headers: { Authorization: `Bearer ${data.token}` },
