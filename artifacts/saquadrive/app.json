@@ -42,18 +42,10 @@
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#0D0D0D"
       },
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyBr--KxYjgHbY7uoaeAzYsnc3y4iuK4hjs"
-        }
-      }
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.zerorisco.driver.app",
-      "config": {
-        "googleMapsApiKey": "AIzaSyBr--KxYjgHbY7uoaeAzYsnc3y4iuK4hjs"
-      }
+      "bundleIdentifier": "com.zerorisco.driver.app"
     },
     "plugins": [
       "expo-router",

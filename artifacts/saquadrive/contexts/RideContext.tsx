@@ -5,6 +5,7 @@ import React, {
 import { Alert } from "react-native";
 import * as Location from "expo-location";
 import { useSocket } from "./SocketContext";
+import { useAuth } from "./AuthContext";
 import { getRoute } from "../lib/google-maps";
 
 export type RideStatus =
@@ -64,6 +65,7 @@ const HISTORY_KEY = "zerorisco_history";
 
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const { socket, connected } = useSocket();
+  const { apiFetch } = useAuth();
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [rideStatus, setRideStatus] = useState<RideStatus>("idle");
   const [history, setHistory] = useState<Ride[]>([]);
@@ -332,6 +334,21 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   async function rateDriver(stars: number) {
     if (!currentRide) return;
+    try {
+      if (currentRide.driver?.id) {
+        await apiFetch("/api/ratings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rideId: currentRide.id,
+            ratedId: parseInt(currentRide.driver.id),
+            stars,
+            role: "passenger",
+          }),
+        });
+      }
+    } catch {
+    }
     const rated = { ...currentRide, rating: stars, status: "completed" as RideStatus };
     const newHistory = [rated, ...history].slice(0, 50);
     setHistory(newHistory);

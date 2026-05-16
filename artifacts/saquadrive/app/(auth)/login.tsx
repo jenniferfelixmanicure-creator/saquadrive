@@ -123,14 +123,8 @@ export default function LoginScreen() {
             onPress={() => {
               Alert.alert(
                 "Recuperação de Senha",
-                "Deseja receber um link de recuperação no seu e-mail?",
-                [
-                  { text: "Cancelar", style: "cancel" },
-                  { 
-                    text: "Enviar", 
-                    onPress: () => Alert.alert("Sucesso", "Link enviado! Verifique sua caixa de entrada.") 
-                  }
-                ]
+                "Para redefinir sua senha, entre em contato com o suporte pelo WhatsApp ou e-mail informado no cadastro.",
+                [{ text: "Entendi", style: "default" }]
               );
             }}
           >

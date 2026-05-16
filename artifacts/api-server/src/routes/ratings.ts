@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Response } from "express";
 import { db } from "@workspace/db";
 import { ratingsTable, ridesTable, driversTable, usersTable } from "@workspace/db/schema";
-import { eq, avg, count, and } from "drizzle-orm";
+import { eq, avg, count, and, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { requireAuth } from "../middlewares/auth.js";
 import type { AuthRequest } from "../middlewares/auth.js";
@@ -61,11 +61,10 @@ router.post("/", requireAuth, async (req: AuthRequest, res: Response) => {
       const newAvg = result[0]?.avg ?? "5.0";
       await db.update(driversTable).set({ rating: String(newAvg) }).where(eq(driversTable.userId, ratedId));
 
-      // Atualizar total de corridas do motorista
-      await db.execute(
-        // @ts-ignore
-        { sql: "UPDATE drivers SET total_rides = total_rides + 1 WHERE user_id = $1", params: [ratedId] }
-      ).catch(() => {});
+      await db.update(driversTable)
+        .set({ totalRides: sql`${driversTable.totalRides} + 1` })
+        .where(eq(driversTable.userId, ratedId))
+        .catch(() => {});
 
       // Atualizar status da corrida com a avaliação do passageiro
       await db.update(ridesTable).set({ passengerRating: stars }).where(eq(ridesTable.id, rideId));
