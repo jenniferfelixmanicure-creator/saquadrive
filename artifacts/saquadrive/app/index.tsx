@@ -145,7 +145,8 @@ export default function WelcomeScreen() {
   useEffect(() => {
     if (isLoading) return;
     if (!user) return;
-    if (mode === "passenger") router.replace("/(passenger)");
+    if ((user as { role?: string }).role === "admin") router.replace("/(admin)");
+    else if (mode === "passenger") router.replace("/(passenger)");
     else if (mode === "driver") router.replace("/(driver)");
   }, [user, mode, isLoading]);
 
