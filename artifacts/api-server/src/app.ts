@@ -4,7 +4,6 @@ import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
 import router from "./routes/index.js";
 import { logger } from "./lib/logger.js";
-import { UPLOAD_DIR } from "./routes/documents.js";
 
 const app: Express = express();
 
@@ -30,7 +29,6 @@ app.use(cors({ origin: allowedOrigins, methods: ["GET", "POST", "PUT", "DELETE",
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Rate limiting — proteção contra spam e força bruta
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -51,9 +49,7 @@ app.use("/api", limiter);
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 
-// Servir arquivos de documentos enviados — usa o mesmo diretório do multer
-app.use("/uploads", express.static(UPLOAD_DIR));
-
+// Uploads agora vão para o Cloudinary CDN — rota /uploads não é mais necessária
 app.use("/api", router);
 
 export default app;
