@@ -39,6 +39,10 @@ if (SENTRY_DSN) {
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Failsafe: garante que a splash some em no máximo 6s,
+// mesmo que ocorra um crash antes do useEffect rodar.
+setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 6000);
+
 const queryClient = new QueryClient();
 
 // Captura erros JS globais fora do React
@@ -129,3 +133,4 @@ function RootLayout() {
 }
 
 export default Sentry.wrap(RootLayout);
+
