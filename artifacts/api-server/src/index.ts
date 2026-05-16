@@ -53,6 +53,7 @@ async function runMigrations() {
     await db.execute(sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS vehicle_color TEXT DEFAULT 'Prata'`);
     await db.execute(sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS rating NUMERIC(3,2) DEFAULT 5.0`);
     await db.execute(sql`ALTER TABLE drivers ADD COLUMN IF NOT EXISTS total_rides INTEGER DEFAULT 0`);
+    await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo_url TEXT`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS rides (
         id TEXT PRIMARY KEY,
