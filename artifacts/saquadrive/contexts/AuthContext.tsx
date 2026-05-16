@@ -90,6 +90,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { loadSession(); }, []);
 
   async function loadSession() {
+    // Acorda o servidor Render imediatamente (plano free dorme após inatividade).
+    // Fire-and-forget: não bloqueia o carregamento do app.
+    fetchWithTimeout(`${API_URL}/api/healthz`, {}, 30000).catch(() => {});
+
     try {
       const [storedUser, storedToken, storedRefresh, storedMode] = await Promise.all([
         AsyncStorage.getItem(USER_KEY),
@@ -103,7 +107,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (storedToken && storedRefresh) {
         const expiry = decodeJwtExpiry(storedToken);
         const expiresIn = expiry ? expiry - Date.now() : 0;
-        
+
         // Se o token expira em menos de 24h, tenta renovar
         if (expiresIn < 24 * 60 * 60 * 1000) {
           try {
@@ -113,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ refreshToken: storedRefresh }),
             }, 5000);
-            
+
             if (res.ok) {
               const data = await res.json() as { token: string; refreshToken: string };
               activeToken = data.token;
@@ -133,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               activeToken = null;
             }
           } catch (e) {
-            // Erro de rede ou timeout - se o token ainda for válido (não expirou totalmente), 
+            // Erro de rede ou timeout - se o token ainda for válido (não expirou totalmente),
             // permite que o usuário entre em modo offline ou tente novamente depois
             if (expiresIn <= 0) {
               activeToken = null; // Token realmente expirado e sem rede para renovar
