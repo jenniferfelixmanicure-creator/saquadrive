@@ -21,13 +21,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
-import { setBaseUrl } from "@workspace/api-client-react";
-import { API_URL } from "@/constants/api";
 
 SplashScreen.preventAutoHideAsync();
-
-// Configura URL base do cliente HTTP gerado para apontar ao backend de produção
-setBaseUrl(API_URL);
 
 const queryClient = new QueryClient();
 
