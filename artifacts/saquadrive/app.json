@@ -52,7 +52,6 @@
       "expo-font",
       "expo-web-browser",
       "expo-navigation-bar",
-      "react-native-keyboard-controller",
       [
         "expo-location",
         {
