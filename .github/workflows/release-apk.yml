@@ -1,0 +1,129 @@
+name: Build APK Release Assinado
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Versão do APK (ex: 1.0.0)'
+        required: false
+        default: '1.0.0'
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-signed-apk:
+    name: APK Release Assinado
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Instalar dependências
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Expo Prebuild (Android)
+        working-directory: artifacts/saquadrive
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Decodificar keystore do secret
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode \
+            > artifacts/saquadrive/android/app/zerorisco.keystore
+
+      - name: Injetar signing config no build.gradle
+        working-directory: artifacts/saquadrive/android
+        run: |
+          # Adiciona signingConfig de release usando variáveis de ambiente
+          cat >> app/build.gradle << 'GRADLE'
+
+          android {
+            signingConfigs {
+              release {
+                storeFile file("zerorisco.keystore")
+                storePassword System.getenv("ANDROID_STORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+              }
+            }
+            buildTypes {
+              release {
+                signingConfig signingConfigs.release
+                minifyEnabled false
+                shrinkResources false
+              }
+            }
+          }
+          GRADLE
+
+      - name: Build APK Release Assinado
+        working-directory: artifacts/saquadrive/android
+        env:
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease \
+            --no-daemon \
+            -Dorg.gradle.jvmargs=-Xmx4g \
+            -Dorg.gradle.parallel=false
+
+      - name: Renomear APK com versão
+        run: |
+          VERSION="${{ github.event.inputs.version_name || '1.0.0' }}"
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          fi
+          cp artifacts/saquadrive/android/app/build/outputs/apk/release/app-release.apk \
+             zerorisco-v${VERSION}-release.apk
+          echo "APK_NAME=zerorisco-v${VERSION}-release.apk" >> $GITHUB_ENV
+
+      - name: Upload APK assinado
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_NAME }}
+          path: ${{ env.APK_NAME }}
+          retention-days: 30
+
+      - name: Criar GitHub Release com APK (em push de tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.APK_NAME }}
+          name: ZeroRisco ${{ github.ref_name }}
+          body: |
+            ## ZeroRisco ${{ github.ref_name }}
+
+            APK de release assinado, pronto para distribuição.
+
+            ### Instalação manual
+            1. Baixe o arquivo `.apk`
+            2. No Android: Configurações → Segurança → Instalar de fontes desconhecidas
+            3. Abra o arquivo `.apk` e instale
+
+            ### Play Store
+            Para enviar à Play Store, use o arquivo AAB gerado no EAS Build.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
