@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { usersTable, driversTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { usersTable, driversTable, ridesTable, ratingsTable } from "@workspace/db/schema";
+import { eq, count, avg, and } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import { requireAuth } from "../middlewares/auth.js";
 import type { Response } from "express";
@@ -28,6 +28,31 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
       .where(eq(driversTable.userId, user.id))
       .limit(1);
 
+    let totalRides = 0;
+    let driverRating: number | null = null;
+
+    if (driver) {
+      // Contagem real de corridas concluídas (não campo cacheado que pode ter bugs)
+      const [rideCount] = await db
+        .select({ count: count(ridesTable.id) })
+        .from(ridesTable)
+        .where(and(
+          eq(ridesTable.driverId, user.id),
+          eq(ridesTable.status, "completed")
+        ));
+      totalRides = rideCount?.count ?? 0;
+
+      // Média real de avaliações recebidas pelo motorista
+      const [ratingResult] = await db
+        .select({ avg: avg(ratingsTable.stars) })
+        .from(ratingsTable)
+        .where(and(
+          eq(ratingsTable.ratedId, user.id),
+          eq(ratingsTable.role, "passenger")
+        ));
+      driverRating = ratingResult?.avg != null ? Math.round(parseFloat(String(ratingResult.avg)) * 10) / 10 : null;
+    }
+
     res.json({
       id: user.id.toString(),
       name: user.name,
@@ -36,6 +61,7 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
       isApproved: user.isApproved,
       rgStatus: user.rgStatus,
       rgUrl: user.rgUrl,
+      profilePhotoUrl: user.profilePhotoUrl,
       ...(driver ? {
         cnhStatus: driver.cnhStatus,
         cnhUrl: driver.cnhUrl,
@@ -45,7 +71,10 @@ router.get("/me", requireAuth, async (req: AuthRequest, res: Response) => {
         vehicleModel: driver.vehicleModel,
         vehicleYear: driver.vehicleYear,
         vehicleType: driver.vehicleType,
+        vehicleColor: driver.vehicleColor,
         driverApproved: driver.isApproved,
+        totalRides,
+        driverRating,
       } : {}),
     });
   } catch (error) {
