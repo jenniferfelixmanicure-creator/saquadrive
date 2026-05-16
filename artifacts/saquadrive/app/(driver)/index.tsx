@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppMap from "@/components/AppMap";
+import Svg, { Circle, Path, Rect, G, Defs, LinearGradient as SvgLinearGradient, Stop, Ellipse, Line } from "react-native-svg";
 import SubscriptionLock from "@/components/SubscriptionLock";
 import SOSButton from "@/components/SOSButton";
 
@@ -53,6 +54,80 @@ function getAddressText(field: RideLocation | string): string {
   return field as string;
 }
 
+
+// ─── Ilustração Conta em Análise ────────────────────────────────────────────
+function NotApprovedIllustration() {
+  return (
+    <Svg width={140} height={130} viewBox="0 0 140 130">
+      <Defs>
+        <SvgLinearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#1E3A5F" stopOpacity="1" />
+          <Stop offset="1" stopColor="#0D1F3C" stopOpacity="1" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#34C759" stopOpacity="1" />
+          <Stop offset="1" stopColor="#28A846" stopOpacity="1" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id="clipGrad" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#FFFFFF" stopOpacity="1" />
+          <Stop offset="1" stopColor="#E8EDF5" stopOpacity="1" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id="loopGrad" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#4F8EF7" stopOpacity="1" />
+          <Stop offset="1" stopColor="#2563EB" stopOpacity="1" />
+        </SvgLinearGradient>
+      </Defs>
+
+      {/* Clipboard body */}
+      <Rect x="32" y="20" width="76" height="90" rx="8" ry="8" fill="url(#clipGrad)" />
+
+      {/* Clipboard clip */}
+      <Rect x="54" y="12" width="32" height="18" rx="5" ry="5" fill="#2563EB" />
+      <Rect x="60" y="18" width="20" height="8" rx="3" ry="3" fill="#1A3A8F" />
+
+      {/* Avatar circle */}
+      <Circle cx="70" cy="50" r="14" fill="#34C759" opacity="0.15" />
+      <Circle cx="70" cy="48" r="8" fill="#2563EB" />
+      <Circle cx="70" cy="45" r="3.5" fill="white" />
+      <Path d="M63 55 Q70 50 77 55" fill="white" />
+
+      {/* Document lines */}
+      <Rect x="44" y="68" width="32" height="4" rx="2" fill="#C0C9D9" />
+      <Rect x="44" y="76" width="24" height="4" rx="2" fill="#D0D8E8" />
+
+      {/* Checkmarks */}
+      <Path d="M44 86 L47 89 L53 83" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M58 86 L61 89 L67 83" stroke="#34C759" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+
+      {/* Shield */}
+      <G transform="translate(24, 68)">
+        <Path d="M16 0 L32 6 L32 20 C32 28 16 36 16 36 C16 36 0 28 0 20 L0 6 Z" fill="url(#shieldGrad)" />
+        <Path d="M8 18 L13 23 L24 12" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      </G>
+
+      {/* Magnifying glass */}
+      <G transform="translate(88, 62)">
+        <Circle cx="14" cy="14" r="13" fill="url(#loopGrad)" />
+        <Circle cx="14" cy="14" r="9" fill="none" stroke="white" strokeWidth="3" />
+        <Line x1="21" y1="21" x2="28" y2="28" stroke="url(#loopGrad)" strokeWidth="4" strokeLinecap="round" />
+        <Line x1="21" y1="21" x2="28" y2="28" stroke="#1E40AF" strokeWidth="4" strokeLinecap="round" />
+      </G>
+
+      {/* Sparkle stars */}
+      <G opacity="0.9">
+        {/* Top left star */}
+        <Path d="M22 28 L24 22 L26 28 L32 30 L26 32 L24 38 L22 32 L16 30 Z" fill="#4F8EF7" opacity="0.7" />
+        {/* Top right star */}
+        <Path d="M108 18 L109.5 14 L111 18 L115 19.5 L111 21 L109.5 25 L108 21 L104 19.5 Z" fill="#00C4FF" opacity="0.7" />
+        {/* Small dot accents */}
+        <Circle cx="30" cy="55" r="2.5" fill="#34C759" opacity="0.6" />
+        <Circle cx="112" cy="48" r="2" fill="#4F8EF7" opacity="0.5" />
+        <Circle cx="118" cy="70" r="1.5" fill="#00C4FF" opacity="0.4" />
+      </G>
+    </Svg>
+  );
+}
+
 export default function DriverHomeScreen() {
   const { user } = useAuth();
   const { socket, connected } = useSocket();
@@ -71,6 +146,7 @@ export default function DriverHomeScreen() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
+  const [showNotApprovedModal, setShowNotApprovedModal] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const dotAnim = useRef(new Animated.Value(0)).current;
@@ -262,11 +338,7 @@ export default function DriverHomeScreen() {
 
   function handleToggle() {
     if (!isOnline && !user?.isApproved) {
-      Alert.alert(
-        "Conta não aprovada",
-        "Seus documentos ainda estão em análise. Você só pode ficar online após aprovação pelo administrador.",
-        [{ text: "Ver documentos", onPress: () => router.push("/(driver)/upload-documents") }, { text: "OK" }]
-      );
+      setShowNotApprovedModal(true);
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -691,6 +763,58 @@ export default function DriverHomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ─── Modal: Conta em Análise ──────────────────────────────── */}
+      <Modal
+        visible={showNotApprovedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotApprovedModal(false)}
+      >
+        <View style={styles.naOverlay}>
+          <View style={[styles.naCard, { backgroundColor: "#12213A", borderColor: "rgba(79,142,247,0.18)" }]}>
+            {/* Illustration */}
+            <View style={styles.naIllustration}>
+              <NotApprovedIllustration />
+            </View>
+
+            {/* Content */}
+            <Text style={styles.naTitle}>Conta em Análise</Text>
+            <Text style={styles.naDesc}>
+              Estamos revisando seus documentos.{"
+"}Em breve você poderá começar a dirigir!
+            </Text>
+
+            {/* Verificar Status button */}
+            <TouchableOpacity
+              style={styles.naVerifyBtn}
+              onPress={() => {
+                setShowNotApprovedModal(false);
+                router.push("/(driver)/upload-documents");
+              }}
+              activeOpacity={0.85}
+            >
+              <View style={styles.naVerifyIcon}>
+                <Feather name="activity" size={16} color="#fff" />
+              </View>
+              <Text style={styles.naVerifyText}>Verificar Status</Text>
+              <Feather name="arrow-right" size={16} color="#fff" />
+            </TouchableOpacity>
+
+            {/* Entendido button */}
+            <TouchableOpacity
+              style={[styles.naUnderstoodBtn, { borderColor: "rgba(52,199,89,0.35)" }]}
+              onPress={() => setShowNotApprovedModal(false)}
+              activeOpacity={0.85}
+            >
+              <View style={styles.naUnderstoodIcon}>
+                <Feather name="check-circle" size={16} color="#34C759" />
+              </View>
+              <Text style={styles.naUnderstoodText}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -823,4 +947,59 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   pinConfirmText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" },
+
+  // ── Not Approved Modal ──────────────────────────────────────────────────────
+  naOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.78)",
+    alignItems: "center", justifyContent: "center", padding: 24,
+  },
+  naCard: {
+    width: "100%", borderRadius: 28, borderWidth: 1,
+    paddingHorizontal: 28, paddingTop: 32, paddingBottom: 28,
+    alignItems: "center", gap: 0,
+    shadowColor: "#4F8EF7", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3, shadowRadius: 24, elevation: 20,
+  },
+  naIllustration: { marginBottom: 20, alignItems: "center" },
+  naTitle: {
+    fontSize: 24, fontFamily: "Inter_700Bold",
+    color: "#FFFFFF", textAlign: "center", marginBottom: 10,
+    letterSpacing: -0.3,
+  },
+  naDesc: {
+    fontSize: 14, fontFamily: "Inter_400Regular",
+    color: "rgba(255,255,255,0.55)", textAlign: "center",
+    lineHeight: 22, marginBottom: 28,
+  },
+  naVerifyBtn: {
+    width: "100%", height: 54, borderRadius: 16,
+    backgroundColor: "#2563EB",
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 20, gap: 12, marginBottom: 12,
+    shadowColor: "#2563EB", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+  },
+  naVerifyIcon: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    alignItems: "center", justifyContent: "center",
+  },
+  naVerifyText: {
+    flex: 1, fontSize: 16, fontFamily: "Inter_600SemiBold", color: "#fff",
+  },
+  naUnderstoodBtn: {
+    width: "100%", height: 54, borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1, flexDirection: "row",
+    alignItems: "center", paddingHorizontal: 20, gap: 12,
+  },
+  naUnderstoodIcon: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: "rgba(52,199,89,0.12)",
+    alignItems: "center", justifyContent: "center",
+  },
+  naUnderstoodText: {
+    flex: 1, fontSize: 16, fontFamily: "Inter_500Medium",
+    color: "rgba(255,255,255,0.75)",
+  },
 });
