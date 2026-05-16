@@ -27,6 +27,23 @@ const RIDE_OPTIONS: RideOption[] = [
 
 type Phase = "idle" | "typing" | "confirming" | "finding" | "driver_coming" | "in_progress" | "rating";
 
+
+// ─── Reticências animadas ────────────────────────────────────────────────────
+function AnimatedDots({ anim, color }: { anim: Animated.Value; color: string }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end", paddingBottom: 3, gap: 3, marginLeft: 2 }}>
+      {[0, 1, 2].map((i) => {
+        const opacity = anim.interpolate({
+          inputRange: [i, i + 0.5, i + 1],
+          outputRange: [0.2, 1, 0.2],
+          extrapolate: "clamp",
+        });
+        return <Animated.Text key={i} style={{ fontSize: 20, fontFamily: "Inter_700Bold", color, opacity }}>•</Animated.Text>;
+      })}
+    </View>
+  );
+}
+
 export default function PassengerHomeScreen() {
   const { user } = useAuth();
   const {
@@ -50,6 +67,10 @@ export default function PassengerHomeScreen() {
   const [previewRouteCoords, setPreviewRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const ring1Anim = useRef(new Animated.Value(0)).current;
+  const ring2Anim = useRef(new Animated.Value(0)).current;
+  const ring3Anim = useRef(new Animated.Value(0)).current;
+  const dotsAnim = useRef(new Animated.Value(0)).current;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -109,18 +130,45 @@ export default function PassengerHomeScreen() {
     return () => { socket.off("passenger:error", handler); };
   }, [socket, phase]);
 
-  // Pulse animation
+  // Radar + pulse animation
   useEffect(() => {
     if (phase === "finding") {
+      // Center pulse
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.15, duration: 700, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+          Animated.timing(pulseAnim, { toValue: 1.12, duration: 700, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
         ])
       ).start();
+
+      // Staggered radar rings
+      const makeRing = (anim: Animated.Value, delay: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.parallel([
+              Animated.timing(anim, { toValue: 1, duration: 1800, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+            ]),
+            Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          ])
+        );
+      makeRing(ring1Anim, 0).start();
+      makeRing(ring2Anim, 600).start();
+      makeRing(ring3Anim, 1200).start();
+
+      // Animated dots
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(dotsAnim, { toValue: 3, duration: 900, useNativeDriver: false }),
+          Animated.timing(dotsAnim, { toValue: 0, duration: 0, useNativeDriver: false }),
+        ])
+      ).start();
     } else {
-      pulseAnim.stopAnimation();
-      pulseAnim.setValue(1);
+      pulseAnim.stopAnimation(); pulseAnim.setValue(1);
+      ring1Anim.stopAnimation(); ring1Anim.setValue(0);
+      ring2Anim.stopAnimation(); ring2Anim.setValue(0);
+      ring3Anim.stopAnimation(); ring3Anim.setValue(0);
+      dotsAnim.stopAnimation(); dotsAnim.setValue(0);
     }
   }, [phase]);
 
@@ -432,25 +480,66 @@ export default function PassengerHomeScreen() {
           </ScrollView>
         )}
 
-        {/* FINDING */}
-        {phase === "finding" && (
-          <View style={styles.centerContent}>
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <View style={[styles.pulseCircle, { backgroundColor: colors.primary }]}>
-                <Feather name="search" size={32} color="#fff" />
+        {/* FINDING — Radar animado */}
+        {phase === "finding" && (() => {
+          const ring1Scale = ring1Anim.interpolate({ inputRange: [0, 1], outputRange: [1, 3.2] });
+          const ring1Opacity = ring1Anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.7, 0.5, 0] });
+          const ring2Scale = ring2Anim.interpolate({ inputRange: [0, 1], outputRange: [1, 3.2] });
+          const ring2Opacity = ring2Anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.7, 0.5, 0] });
+          const ring3Scale = ring3Anim.interpolate({ inputRange: [0, 1], outputRange: [1, 3.2] });
+          const ring3Opacity = ring3Anim.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.7, 0.5, 0] });
+
+          return (
+            <View style={styles.findingWrapper}>
+              {/* Radar */}
+              <View style={styles.radarContainer}>
+                <Animated.View style={[styles.radarRing, { borderColor: colors.primary, opacity: ring1Opacity, transform: [{ scale: ring1Scale }] }]} />
+                <Animated.View style={[styles.radarRing, { borderColor: colors.primary, opacity: ring2Opacity, transform: [{ scale: ring2Scale }] }]} />
+                <Animated.View style={[styles.radarRing, { borderColor: colors.primary, opacity: ring3Opacity, transform: [{ scale: ring3Scale }] }]} />
+                <Animated.View style={[styles.radarCore, { backgroundColor: colors.primary, transform: [{ scale: pulseAnim }] }]}>
+                  <Feather name="navigation" size={30} color="#fff" />
+                </Animated.View>
               </View>
-            </Animated.View>
-            <Text style={[styles.findingTitle, { color: colors.foreground }]}>Procurando motorista…</Text>
-            <Text style={[styles.findingDesc, { color: colors.mutedForeground }]}>Aguarde, estamos localizando o motorista mais próximo</Text>
-            <TouchableOpacity
-              style={[styles.cancelBtn, { backgroundColor: colors.muted, borderColor: colors.border, borderWidth: 1 }]}
-              onPress={handleCancel}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.cancelBtnText, { color: colors.foreground }]}>Cancelar</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+
+              {/* Título com reticências */}
+              <View style={styles.findingTitleRow}>
+                <Text style={[styles.findingTitle, { color: colors.foreground }]}>Procurando motorista parceiro</Text>
+                <AnimatedDots anim={dotsAnim} color={colors.primary} />
+              </View>
+              <Text style={[styles.findingDesc, { color: colors.mutedForeground }]}>
+                Conectando você ao melhor parceiro próximo
+              </Text>
+
+              {/* Destino */}
+              {destination && (
+                <View style={[styles.findingDestBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                  <Feather name="map-pin" size={14} color={colors.accent} />
+                  <Text style={[styles.findingDestText, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {destination.address}
+                  </Text>
+                </View>
+              )}
+
+              {/* Preço estimado */}
+              <View style={[styles.findingPriceRow, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "33" }]}>
+                <Feather name="dollar-sign" size={14} color={colors.primary} />
+                <Text style={[styles.findingPriceLabel, { color: colors.mutedForeground }]}>Valor estimado</Text>
+                <Text style={[styles.findingPriceValue, { color: colors.primary }]}>
+                  R$ {priceInfo.total.toFixed(2)}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.cancelBtn, { backgroundColor: colors.muted, borderColor: colors.border, borderWidth: 1 }]}
+                onPress={handleCancel}
+                activeOpacity={0.8}
+              >
+                <Feather name="x" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.cancelBtnText, { color: colors.foreground }]}>Cancelar busca</Text>
+              </TouchableOpacity>
+            </View>
+          );
+        })()}
 
         {/* DRIVER COMING */}
         {phase === "driver_coming" && currentRide?.driver && (
@@ -624,7 +713,7 @@ const styles = StyleSheet.create({
   ridePrice: { fontSize: 16, fontFamily: "Inter_700Bold" },
   requestBtn: { height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 8 },
   requestBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
-  cancelBtn: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, alignItems: "center" },
+  cancelBtn: { flexDirection: "row", gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   cancelBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   centerContent: { alignItems: "center", paddingVertical: 16, gap: 10 },
   pulseCircle: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center", marginBottom: 8 },
@@ -655,4 +744,36 @@ const styles = StyleSheet.create({
   emptyStateTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   emptyStateDesc: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 },
   approvalBadge: { width: 72, height: 72, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+
+  // ── Finding / Radar ──────────────────────────────────────────────────────────
+  findingWrapper: { alignItems: "center", paddingVertical: 8, gap: 12 },
+  radarContainer: {
+    width: 100, height: 100, alignItems: "center", justifyContent: "center",
+    marginVertical: 8,
+  },
+  radarRing: {
+    position: "absolute",
+    width: 80, height: 80, borderRadius: 40,
+    borderWidth: 2,
+  },
+  radarCore: {
+    width: 80, height: 80, borderRadius: 40,
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5, shadowRadius: 16, elevation: 10,
+  },
+  findingTitleRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", justifyContent: "center" },
+  findingDestBox: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 12, borderWidth: 1, paddingHorizontal: 14,
+    paddingVertical: 10, width: "100%",
+  },
+  findingDestText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  findingPriceRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 12, borderWidth: 1, paddingHorizontal: 14,
+    paddingVertical: 10, width: "100%",
+  },
+  findingPriceLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  findingPriceValue: { fontSize: 16, fontFamily: "Inter_700Bold" },
 });
