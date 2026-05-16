@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "zerorisco",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "backgroundColor": "#0D0D0D",
     "androidStatusBar": {
       "barStyle": "light-content",
@@ -52,6 +52,7 @@
       "expo-font",
       "expo-web-browser",
       "expo-navigation-bar",
+      "react-native-keyboard-controller",
       [
         "expo-location",
         {
