@@ -142,15 +142,24 @@ export default function WelcomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
+  const [loadingTimedOut, setLoadingTimedOut] = React.useState(false);
+
   useEffect(() => {
-    if (isLoading) return;
+    const timer = setTimeout(() => setLoadingTimedOut(true), 10000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading && !loadingTimedOut) return;
     if (!user) return;
     if ((user as { role?: string }).role === "admin") router.replace("/(admin)");
     else if (mode === "passenger") router.replace("/(passenger)");
     else if (mode === "driver") router.replace("/(driver)");
-  }, [user, mode, isLoading]);
+  }, [user, mode, isLoading, loadingTimedOut]);
 
-  if (isLoading) {
+  const showLoading = isLoading && !loadingTimedOut;
+
+  if (showLoading) {
     return (
       <View style={[styles.container, { backgroundColor: "#0D0D0D" }]}>
         <Image
