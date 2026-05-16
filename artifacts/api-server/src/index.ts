@@ -124,7 +124,7 @@ httpServer.listen(port, async () => {
   if (RENDER_EXTERNAL_URL) {
     logger.info(`Keep-alive ativado para: ${RENDER_EXTERNAL_URL}`);
     setInterval(() => {
-      https.get(`${RENDER_EXTERNAL_URL}/api/health`, (res) => {
+      https.get(`${RENDER_EXTERNAL_URL}/api/healthz`, (res) => {
         logger.info(`Keep-alive ping enviado. Status: ${res.statusCode}`);
       }).on('error', (err) => {
         logger.error(`Erro no keep-alive ping: ${err.message}`);
