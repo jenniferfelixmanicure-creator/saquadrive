@@ -11,7 +11,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as NavigationBar from "expo-navigation-bar";
 import { Platform } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { registerForPushNotificationsAsync } from "@/lib/notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -21,7 +21,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
-import { CustomLoading } from "@/components/CustomLoading";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -41,7 +40,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
+  useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -49,30 +48,11 @@ export default function RootLayout() {
     ...Feather.font,
   });
 
-  const [splashHidden, setSplashHidden] = useState(false);
-
+  // Esconde a splash imediatamente — não espera fontes.
+  // Fontes carregam em segundo plano sem bloquear o app.
   useEffect(() => {
-    async function hideSplash() {
-      try {
-        await SplashScreen.hideAsync();
-      } catch (e) {
-        // Ignore errors
-      } finally {
-        setSplashHidden(true);
-      }
-    }
-
-    const timeout = setTimeout(() => {
-      hideSplash();
-    }, 3000); // Reduzido para 3s para melhor UX
-
-    if (fontsLoaded || fontError) {
-      clearTimeout(timeout);
-      hideSplash();
-    }
-
-    return () => clearTimeout(timeout);
-  }, [fontsLoaded, fontError]);
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   useEffect(() => {
     registerForPushNotificationsAsync();
@@ -82,8 +62,6 @@ export default function RootLayout() {
       NavigationBar.setBackgroundColorAsync("#00000000").catch(() => {});
     }
   }, []);
-
-  if (!splashHidden) return <CustomLoading />;
 
   return (
     <SafeAreaProvider>
