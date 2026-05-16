@@ -39,17 +39,16 @@ import * as Sentry from "@sentry/react-native";
     } catch {}
   }
 
-  // ── Splash — previne auto-hide e garante fechamento em no máximo 3s ─────────
+  // ── Splash: previne auto-hide e garante fechamento em no máximo 3s ──────────
   try { SplashScreen.preventAutoHideAsync(); } catch {}
 
+  // Failsafe absoluto: splash some após 3s mesmo se o app crashar antes do mount
   const _splashFailsafe = setTimeout(() => {
     try { SplashScreen.hideAsync(); } catch {}
   }, 3000);
 
   const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: 1, retryDelay: 1000 },
-    },
+    defaultOptions: { queries: { retry: 1, retryDelay: 1000 } },
   });
 
   // ── Captura erros JS globais ─────────────────────────────────────────────────
@@ -64,38 +63,17 @@ import * as Sentry from "@sentry/react-native";
     });
   } catch {}
 
-  // ── KeyboardProvider com fallback seguro ─────────────────────────────────────
-  let KeyboardProvider: React.ComponentType<{ children: React.ReactNode }> | null = null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const kbModule = require("react-native-keyboard-controller");
-    KeyboardProvider = kbModule.KeyboardProvider ?? null;
-  } catch {}
-
-  function SafeKeyboardProvider({ children }: { children: React.ReactNode }) {
-    if (KeyboardProvider) {
-      try {
-        return <KeyboardProvider>{children}</KeyboardProvider>;
-      } catch {
-        return <>{children}</>;
-      }
-    }
-    return <>{children}</>;
-  }
-
-  // ── OTA Update — verifica e aplica atualização silenciosamente ───────────────
+  // ── OTA Update: verifica e aplica silenciosamente ────────────────────────────
   async function checkForOTAUpdate() {
     try {
-      // Só verifica em builds de produção (não em dev/Expo Go)
-      if (__DEV__ || !Updates.isEmbeddedLaunch === false) return;
+      if (__DEV__) return;
       const update = await Updates.checkForUpdateAsync();
       if (update.isAvailable) {
         await Updates.fetchUpdateAsync();
-        // Reinicia o app para aplicar a atualização
         await Updates.reloadAsync();
       }
     } catch {
-      // Falha silenciosa — nunca bloqueia o app
+      // Nunca bloqueia o app
     }
   }
 
@@ -125,18 +103,18 @@ import * as Sentry from "@sentry/react-native";
       ...Feather.font,
     });
 
-    // 1. Esconde splash assim que o componente monta — não espera fontes nem rede
+    // Esconde splash imediatamente ao montar — não espera fontes nem rede
     useEffect(() => {
       clearTimeout(_splashFailsafe);
       try { SplashScreen.hideAsync(); } catch {}
     }, []);
 
-    // 2. Verifica atualização OTA em background (não bloqueia a UI)
+    // Verifica OTA em background
     useEffect(() => {
       checkForOTAUpdate();
     }, []);
 
-    // 3. Verifica erros globais capturados antes do React montar
+    // Captura erros globais antes do React
     useEffect(() => {
       if (_globalCrashError) setCrashError(_globalCrashError);
       const id = setInterval(() => {
@@ -145,7 +123,7 @@ import * as Sentry from "@sentry/react-native";
       return () => clearInterval(id);
     }, [crashError]);
 
-    // 4. Configura barra de navegação Android
+    // Configura barra de navegação Android
     useEffect(() => {
       try { registerForPushNotificationsAsync(); } catch {}
       if (Platform.OS === "android") {
@@ -170,15 +148,13 @@ import * as Sentry from "@sentry/react-native";
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
-              <SafeKeyboardProvider>
-                <AuthProvider>
-                  <SocketProvider>
-                    <RideProvider>
-                      <RootLayoutNav />
-                    </RideProvider>
-                  </SocketProvider>
-                </AuthProvider>
-              </SafeKeyboardProvider>
+              <AuthProvider>
+                <SocketProvider>
+                  <RideProvider>
+                    <RootLayoutNav />
+                  </RideProvider>
+                </SocketProvider>
+              </AuthProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>
         </ErrorBoundary>
