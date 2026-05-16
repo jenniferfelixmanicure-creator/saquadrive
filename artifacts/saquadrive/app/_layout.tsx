@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -23,16 +24,30 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
 
+// Inicializa Sentry o mais cedo possível — captura crashes nativos e JS
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    debug: false,
+    tracesSampleRate: 0.1,
+    enableNativeNagger: false,
+    enableAutoSessionTracking: true,
+    attachScreenshot: false,
+  });
+}
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const queryClient = new QueryClient();
 
-// Captura erros JS não tratados (fora do React) e exibe na tela
+// Captura erros JS globais fora do React
 let _globalCrashError: Error | null = null;
 try {
   const prev = ErrorUtils.getGlobalHandler();
   ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
     _globalCrashError = error;
+    if (SENTRY_DSN) Sentry.captureException(error);
     prev?.(error, isFatal);
   });
 } catch {}
@@ -50,7 +65,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [crashError, setCrashError] = useState<Error | null>(null);
 
   useFonts({
@@ -61,12 +76,12 @@ export default function RootLayout() {
     ...Feather.font,
   });
 
-  // Esconde splash imediatamente — sem esperar fontes
+  // Esconde splash imediatamente — sem bloquear por fontes
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
   }, []);
 
-  // Verifica se houve crash global antes do React renderizar
+  // Verifica erros globais capturados antes do React
   useEffect(() => {
     if (_globalCrashError) setCrashError(_globalCrashError);
     const id = setInterval(() => {
@@ -84,7 +99,6 @@ export default function RootLayout() {
     }
   }, []);
 
-  // Mostra erro global visível na tela (para diagnóstico)
   if (crashError) {
     return (
       <SafeAreaProvider>
@@ -113,3 +127,5 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+export default Sentry.wrap(RootLayout);
