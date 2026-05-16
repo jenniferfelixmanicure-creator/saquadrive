@@ -21,6 +21,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
+import { CustomLoading } from "@/components/CustomLoading";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -82,7 +83,7 @@ export default function RootLayout() {
     }
   }, []);
 
-  if (!splashHidden) return null;
+  if (!splashHidden) return <CustomLoading />;
 
   return (
     <SafeAreaProvider>
