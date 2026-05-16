@@ -9,6 +9,15 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "backgroundColor": "#0D0D0D",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/8bc17380-3446-4170-a3ff-8cd03b1dd776",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
     "androidStatusBar": {
       "barStyle": "light-content",
       "backgroundColor": "#00000000",
@@ -52,6 +61,7 @@
       "expo-font",
       "expo-web-browser",
       "expo-navigation-bar",
+      "expo-updates",
       [
         "expo-location",
         {
