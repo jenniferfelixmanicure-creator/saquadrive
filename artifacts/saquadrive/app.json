@@ -20,12 +20,16 @@
       "backgroundColor": "#00000000"
     },
     "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#0D0D0D"
     },
     "android": {
       "package": "com.zerorisco.driver.app",
       "softwareKeyboardLayoutMode": "pan",
       "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
         "backgroundColor": "#0D0D0D"
       },
       "permissions": [
