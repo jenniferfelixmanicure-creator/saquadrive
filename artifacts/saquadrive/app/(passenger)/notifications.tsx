@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Platform,
   ScrollView,
@@ -14,6 +15,18 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
+
+const PREFS_KEY = "notif_prefs_passenger";
+
+const DEFAULT_PREFS: Record<string, boolean> = {
+  ride_found: true,
+  ride_arrived: true,
+  ride_started: true,
+  ride_completed: true,
+  ride_cancelled: true,
+  chat_message: true,
+  promotions: false,
+};
 
 type NotifItem = {
   key: string;
@@ -37,24 +50,30 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const [prefs, setPrefs] = useState<Record<string, boolean>>({
-    ride_found: true,
-    ride_arrived: true,
-    ride_started: true,
-    ride_completed: true,
-    ride_cancelled: true,
-    chat_message: true,
-    promotions: false,
-  });
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(DEFAULT_PREFS);
+
+  useEffect(() => {
+    AsyncStorage.getItem(PREFS_KEY).then((raw) => {
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw) as Record<string, boolean>;
+          setPrefs({ ...DEFAULT_PREFS, ...saved });
+        } catch { /* usa defaults */ }
+      }
+    });
+  }, []);
 
   function toggle(key: string) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+    setPrefs((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      AsyncStorage.setItem(PREFS_KEY, JSON.stringify(next));
+      return next;
+    });
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
@@ -67,7 +86,7 @@ export default function NotificationsScreen() {
         <View style={[styles.infoBanner, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "44" }]}>
           <Feather name="bell" size={16} color={colors.primary} />
           <Text style={[styles.infoText, { color: colors.primary }]}>
-            Ative as notificações para não perder nenhuma atualização das suas corridas.
+            Ative as notificações para não perder nenhuma atualização. Suas preferências são salvas automaticamente.
           </Text>
         </View>
 
