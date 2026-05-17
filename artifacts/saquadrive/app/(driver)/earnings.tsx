@@ -21,7 +21,7 @@ type Period = "hoje" | "semana" | "mes";
 type ApiRide = {
   id: string;
   originAddress: string;
-  destinationAddress: string;
+  destAddress: string;
   rideType: string;
   price: string;
   status: string;
@@ -67,7 +67,7 @@ function toDisplay(ride: ApiRide): DisplayRide {
     id: ride.id,
     time: `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`,
     origin: ride.originAddress,
-    destination: ride.destinationAddress,
+    destination: ride.destAddress,
     price: parseFloat(ride.price),
     distance: ride.distance ?? "—",
   };
