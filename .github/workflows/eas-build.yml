@@ -32,6 +32,12 @@ jobs:
 
       - name: Instalar dependências
         run: pnpm install --no-frozen-lockfile
+      - name: Limpar cache do pnpm
+        run: pnpm store prune
+      - name: Limpar caches do Gradle
+        run: |
+          rm -rf $HOME/.gradle/caches
+          rm -rf artifacts/saquadrive/android/.gradle
 
       - name: Configurar Java 17
         uses: actions/setup-java@v4
