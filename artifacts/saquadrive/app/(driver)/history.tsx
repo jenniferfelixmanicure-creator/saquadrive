@@ -19,7 +19,7 @@ import { API_URL } from "@/constants/api";
 type ApiRide = {
   id: string;
   originAddress: string;
-  destinationAddress: string;
+  destAddress: string;
   rideType: string;
   price: string;
   status: string;
@@ -79,7 +79,7 @@ function RideItem({ item, colors }: { item: ApiRide; colors: ReturnType<typeof u
         <View style={styles.routePoint}>
           <View style={[styles.dot, { backgroundColor: colors.accent }]} />
           <Text style={[styles.addr, { color: colors.foreground }]} numberOfLines={1}>
-            {item.destinationAddress}
+            {item.destAddress}
           </Text>
         </View>
       </View>
@@ -124,9 +124,13 @@ export default function DriverHistoryScreen() {
     setLoading(true);
     setError(null);
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
       const res = await fetch(`${API_URL}/api/rides/driver/history`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json() as ApiRide[];
       setRides(data);
