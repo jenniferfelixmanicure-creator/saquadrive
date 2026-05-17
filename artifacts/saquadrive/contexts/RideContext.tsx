@@ -172,6 +172,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       setRideStatus("idle");
       setCurrentRide(null);
       currentRideRef.current = null;
+      Alert.alert("Sem motoristas", "Nenhum motorista disponível na sua região agora. Tente novamente em alguns instantes.");
     });
 
     socket.on("passenger:price_confirmed", ({ rideId, price, pin }: { rideId: string; price: number; pin: string }) => {
@@ -292,24 +293,25 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       pin: Math.floor(1000 + Math.random() * 9000).toString(),
     };
 
+    if (!socket || !connected) {
+      Alert.alert("Sem conexão", "Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.");
+      return;
+    }
+
     setCurrentRide(ride);
     currentRideRef.current = ride;
     setRideStatus("finding");
 
-    if (socket && connected) {
-      socket.emit("passenger:request_ride", {
-        rideId, passengerId, passengerName,
-        origin: { address: origin.address, lat: origin.lat, lng: origin.lng },
-        destination: { address: destination.address, lat: destination.lat, lng: destination.lng },
-        rideType, price,
-        distance: calculateDistance(finalDistance),
-        distanceKm: finalDistance,
-        duration: finalDuration,
-        pin: ride.pin,
-      });
-    } else {
-      setRideStatus("idle");
-    }
+    (socket as { emit: (event: string, data: unknown) => void }).emit("passenger:request_ride", {
+      rideId, passengerId, passengerName,
+      origin: { address: origin.address, lat: origin.lat, lng: origin.lng },
+      destination: { address: destination.address, lat: destination.lat, lng: destination.lng },
+      rideType, price,
+      distance: calculateDistance(finalDistance),
+      distanceKm: finalDistance,
+      duration: finalDuration,
+      pin: ride.pin,
+    });
 
     const fallbackTimer = setTimeout(() => {
       if (currentRideRef.current?.status === "finding") {
