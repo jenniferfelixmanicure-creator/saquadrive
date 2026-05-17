@@ -50,32 +50,33 @@ import React, { useEffect, useRef, useState } from "react";
 
     useEffect(() => {
       if (!cameraRef.current) return;
-      if (routeCoordinates && routeCoordinates.length > 1) {
-        const lons = routeCoordinates.map((c) => c.longitude);
-        const lats = routeCoordinates.map((c) => c.latitude);
-        // v11: fitBounds({ sw: [minLng, minLat], ne: [maxLng, maxLat] }, { duration })
-        cameraRef.current.fitBounds(
-          {
-            sw: [Math.min(...lons), Math.min(...lats)],
-            ne: [Math.max(...lons), Math.max(...lats)],
-          },
-          { duration: 500 }
-        );
-      } else if (origin && destination) {
-        cameraRef.current.fitBounds(
-          {
-            sw: [Math.min(origin.lng, destination.lng), Math.min(origin.lat, destination.lat)],
-            ne: [Math.max(origin.lng, destination.lng), Math.max(origin.lat, destination.lat)],
-          },
-          { duration: 500 }
-        );
-      } else if (driverRealtimeLocation) {
-        // v11: flyTo({ center, zoom, duration })
-        cameraRef.current.flyTo({
-          center: [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
-          zoom: 15,
-          duration: 500,
-        });
+      try {
+        if (routeCoordinates && routeCoordinates.length > 1) {
+          const lons = routeCoordinates.map((c) => c.longitude);
+          const lats = routeCoordinates.map((c) => c.latitude);
+          // v11: fitBounds(ne, sw, padding, duration) — argumentos posicionais
+          cameraRef.current.fitBounds(
+            [Math.max(...lons), Math.max(...lats)],
+            [Math.min(...lons), Math.min(...lats)],
+            50,
+            500
+          );
+        } else if (origin && destination) {
+          cameraRef.current.fitBounds(
+            [Math.max(origin.lng, destination.lng), Math.max(origin.lat, destination.lat)],
+            [Math.min(origin.lng, destination.lng), Math.min(origin.lat, destination.lat)],
+            50,
+            500
+          );
+        } else if (driverRealtimeLocation) {
+          // v11: flyTo(coordinates, duration)
+          cameraRef.current.flyTo(
+            [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
+            500
+          );
+        }
+      } catch {
+        // Ignora erros de câmera para não travar o app
       }
     }, [
       origin?.lat, origin?.lng,
