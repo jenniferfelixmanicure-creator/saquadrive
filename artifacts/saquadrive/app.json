@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "zerorisco",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "backgroundColor": "#0D0D0D",
     "runtimeVersion": {
       "policy": "appVersion"
@@ -68,14 +68,7 @@
           "locationAlwaysPermission": "Permita que o ZeroRisco acesse sua localização para encontrar corridas próximas."
         }
       ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "zerorisco",
-          "project": "zerorisco-saquarema",
-          "uploadSourceMaps": false
-        }
-      ]
+
     ],
     "owner": "zerorisco",
     "extra": {
