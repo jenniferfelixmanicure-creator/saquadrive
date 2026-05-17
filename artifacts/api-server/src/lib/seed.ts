@@ -13,6 +13,8 @@ export async function seedAdmin(logger: Logger): Promise<void> {
     return;
   }
 
+  const passwordHash = await bcrypt.hash(secret, 12);
+
   const existing = await db
     .select({ id: usersTable.id })
     .from(usersTable)
@@ -20,11 +22,20 @@ export async function seedAdmin(logger: Logger): Promise<void> {
     .limit(1);
 
   if (existing.length > 0) {
-    logger.info({ email }, "Admin user already exists — skipping seed");
+    await db
+      .update(usersTable)
+      .set({
+        passwordHash,
+        role: "admin",
+        isApproved: true,
+        rgStatus: "approved",
+        cnhStatus: "approved",
+        crlvStatus: "approved",
+      })
+      .where(eq(usersTable.email, email.toLowerCase()));
+    logger.info({ email }, "Admin user password synced with ADMIN_SECRET");
     return;
   }
-
-  const passwordHash = await bcrypt.hash(secret, 12);
 
   await db.insert(usersTable).values({
     name: "Administrador",
