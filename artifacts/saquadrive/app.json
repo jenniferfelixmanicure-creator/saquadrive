@@ -24,7 +24,7 @@
     },
     "splash": {
       "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
+      "resizeMode": "cover",
       "backgroundColor": "#0D0D0D"
     },
     "android": {
@@ -32,7 +32,7 @@
       "softwareKeyboardLayoutMode": "pan",
       "splash": {
         "image": "./assets/images/splash.png",
-        "resizeMode": "contain",
+        "resizeMode": "cover",
         "backgroundColor": "#0D0D0D"
       },
       "permissions": [
