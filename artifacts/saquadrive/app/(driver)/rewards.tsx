@@ -16,8 +16,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 type DriverStats = {
-  todayRides: number;
-  todayFiveStars: number;
   totalRides: number;
 };
 
