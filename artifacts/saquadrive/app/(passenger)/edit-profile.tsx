@@ -88,7 +88,7 @@ export default function EditProfileScreen() {
       const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
 
       const formData = new FormData();
-      formData.append("photo", { uri: asset.uri, name: filename, type: mimeType } as unknown as Blob);
+      formData.append("file", { uri: asset.uri, name: filename, type: mimeType } as unknown as Blob);
 
       const res = await fetch(`${API_URL}/api/documents/upload-profile-photo`, {
         method: "POST",
@@ -96,10 +96,10 @@ export default function EditProfileScreen() {
         body: formData,
       });
 
-      const data = await res.json() as { profilePhotoUrl?: string; message?: string };
+      const data = await res.json() as { url?: string; message?: string };
       if (!res.ok) throw new Error(data.message ?? "Erro ao enviar foto");
 
-      await updateUserDocuments({ profilePhotoUrl: data.profilePhotoUrl });
+      await updateUserDocuments({ profilePhotoUrl: data.url });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Não foi possível atualizar a foto.");
