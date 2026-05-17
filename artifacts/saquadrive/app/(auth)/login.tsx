@@ -18,6 +18,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { AppMode } from "@/contexts/AuthContext";
 
+function decodeJwtRole(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.role ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function LoginScreen() {
   const { login, setMode } = useAuth();
   const colors = useColors();
@@ -41,16 +50,30 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email.trim(), password);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      let role: string | null = null;
+      try {
+        const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+        const savedToken = await AsyncStorage.getItem("zerorisco_token");
+        if (savedToken) role = decodeJwtRole(savedToken);
+      } catch {}
+
+      if (role === "admin") {
+        router.replace("/(admin)");
+        return;
+      }
+
       const mode = params.mode ?? "passenger";
       setMode(mode);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (mode === "driver") {
         router.replace("/(driver)");
       } else {
         router.replace("/(passenger)");
       }
-    } catch {
-      setError("Erro ao fazer login. Tente novamente.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao fazer login. Tente novamente.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -68,7 +91,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.foreground }]}>Entrar</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Bem-vindo de volta ao ZeroRisco
+            Bem-vindo de volta ao SaquaDrive
           </Text>
         </View>
 
@@ -118,7 +141,7 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.forgotBtn}
             onPress={() => {
               Alert.alert(
