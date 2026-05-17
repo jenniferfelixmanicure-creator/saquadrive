@@ -24,7 +24,7 @@ import { API_URL } from "@/constants/api";
 
 export default function EditProfileScreen() {
   const colors = useColors();
-  const { user, token, updateUser, updateUserDocuments } = useAuth();
+  const { user, apiFetch, updateUser, updateUserDocuments } = useAuth();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -90,9 +90,8 @@ export default function EditProfileScreen() {
       const formData = new FormData();
       formData.append("file", { uri: asset.uri, name: filename, type: mimeType } as unknown as Blob);
 
-      const res = await fetch(`${API_URL}/api/documents/upload-profile-photo`, {
+      const res = await apiFetch("/api/documents/upload-profile-photo", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
 

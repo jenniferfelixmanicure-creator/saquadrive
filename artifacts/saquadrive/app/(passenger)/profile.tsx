@@ -163,7 +163,7 @@ export default function PassengerProfileScreen() {
         </View>
 
         <Text style={[styles.version, { color: colors.mutedForeground }]}>
-          SaquaDrive v1.0.0
+          Zerorisco v1.0.0
         </Text>
       </ScrollView>
     </View>

@@ -178,7 +178,7 @@ export default function AdminScreen() {
             <Feather name="shield" size={32} color="#6366f1" />
           </View>
           <Text style={styles.loginTitle}>Painel Admin</Text>
-          <Text style={styles.loginSubtitle}>SaquaDrive — Área Restrita</Text>
+          <Text style={styles.loginSubtitle}>Zerorisco — Área Restrita</Text>
 
           <TextInput
             style={styles.loginInput}
@@ -270,7 +270,7 @@ export default function AdminScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Painel Admin</Text>
-          <Text style={styles.headerSub}>SaquaDrive</Text>
+          <Text style={styles.headerSub}>Zerorisco</Text>
         </View>
         <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
           <Feather name="log-out" size={18} color="#dc2626" />

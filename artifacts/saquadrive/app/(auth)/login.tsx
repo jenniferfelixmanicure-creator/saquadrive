@@ -91,7 +91,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.foreground }]}>Entrar</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Bem-vindo de volta ao SaquaDrive
+            Bem-vindo de volta ao Zerorisco
           </Text>
         </View>
 

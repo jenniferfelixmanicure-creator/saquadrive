@@ -185,7 +185,7 @@ export default function DriverProfileScreen() {
           <Row icon="log-out" label="Sair" onPress={handleLogout} danger colors={colors} />
         </View>
 
-        <Text style={[styles.version, { color: colors.mutedForeground }]}>SaquaDrive v1.0.0 · Motorista</Text>
+        <Text style={[styles.version, { color: colors.mutedForeground }]}>Zerorisco v1.0.0 · Motorista</Text>
       </ScrollView>
     </View>
   );

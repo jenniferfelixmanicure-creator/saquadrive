@@ -72,6 +72,11 @@ type ChatMessage = {
 
 const onlineDrivers = new Map<string, DriverInfo>();
 const pendingRides = new Map<string, RideRequest>();
+const waitingRides = new Map<string, {
+  ride: RideRequest;
+  timeoutId: ReturnType<typeof setTimeout>;
+}>();
+
 const activeRides = new Map<string, {
   passengerId: string;
   driverId: string;
@@ -196,6 +201,37 @@ export function registerRideSocket(io: Server) {
       const info: DriverInfo = { ...data, socketId: socket.id };
       onlineDrivers.set(data.driverId, info);
       logger.info({ driverId: data.driverId, total: onlineDrivers.size }, "Driver online");
+
+      // Verificar fila de espera — despachar corridas aguardando motorista
+      for (const [waitRideId, waiting] of waitingRides.entries()) {
+        const { ride: waitRide, timeoutId: waitTimeout } = waiting;
+        const nearbyForWaiting = getNearbyDrivers(waitRide.origin.lat, waitRide.origin.lng, waitRide.rideType);
+        if (nearbyForWaiting.length > 0) {
+          clearTimeout(waitTimeout);
+          waitingRides.delete(waitRideId);
+          logger.info({ rideId: waitRideId, driverId: data.driverId }, "Motorista conectou — despachando corrida da fila de espera");
+          nearbyForWaiting.forEach((driver) => dispatchToDriver(io, waitRide, driver));
+          // Confirmar preço e PIN ao passageiro
+          const passengerSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
+          if (passengerSocket) {
+            passengerSocket.emit("passenger:price_confirmed", {
+              rideId: waitRideId,
+              price: waitRide.price,
+              pin: waitRide.pin,
+            });
+          }
+          // Timeout de 15s para aceitação do motorista
+          setTimeout(async () => {
+            if (pendingRides.has(waitRideId)) {
+              const passSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
+              if (passSocket) passSocket.emit("passenger:no_drivers", { rideId: waitRideId });
+              pendingRides.delete(waitRideId);
+              nearbyForWaiting.forEach((d) => io.to(d.socketId).emit("driver:ride_cancelled_for_others", { rideId: waitRideId }));
+              await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, waitRideId)).catch(() => {});
+            }
+          }, 15000);
+        }
+      }
     });
 
     socket.on("driver:offline", () => {
@@ -288,9 +324,19 @@ export function registerRideSocket(io: Server) {
       const nearbyDrivers = getNearbyDrivers(origin.lat, origin.lng, data.rideType);
 
       if (nearbyDrivers.length === 0) {
-        socket.emit("passenger:no_drivers", { rideId: data.rideId });
-        pendingRides.delete(data.rideId);
-        await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, data.rideId)).catch(() => {});
+        // Sem motoristas agora — aguarda até 60s por um motorista que se conecte
+        socket.emit("passenger:waiting_for_driver", { rideId: data.rideId, waitSeconds: 60 });
+        logger.info({ rideId: data.rideId }, "Sem motoristas disponíveis — aguardando até 60s na fila");
+        const waitTimeoutId = setTimeout(async () => {
+          if (waitingRides.has(data.rideId)) {
+            waitingRides.delete(data.rideId);
+            pendingRides.delete(data.rideId);
+            socket.emit("passenger:no_drivers", { rideId: data.rideId });
+            logger.info({ rideId: data.rideId }, "Timeout de 60s expirado — sem motoristas encontrados");
+            await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, data.rideId)).catch(() => {});
+          }
+        }, 60000);
+        waitingRides.set(data.rideId, { ride, timeoutId: waitTimeoutId });
         return;
       }
 
@@ -431,6 +477,12 @@ export function registerRideSocket(io: Server) {
     });
 
     socket.on("passenger:cancel", async ({ rideId }: { rideId: string }) => {
+      if (waitingRides.has(rideId)) {
+        const { timeoutId } = waitingRides.get(rideId)!;
+        clearTimeout(timeoutId);
+        waitingRides.delete(rideId);
+        logger.info({ rideId }, "Corrida cancelada (na fila de espera)");
+      }
       if (pendingRides.has(rideId)) {
         pendingRides.delete(rideId);
         logger.info({ rideId }, "Corrida cancelada (pendente)");
