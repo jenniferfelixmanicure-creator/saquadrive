@@ -63,6 +63,13 @@ router.get("/rides/driver/stats", authenticate, async (req: AuthRequest, res) =>
     const [driver] = await db.select({ driverRating: usersTable.driverRating })
       .from(usersTable).where(eq(usersTable.id, driverId)).limit(1);
 
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [today] = await db.select({
+      todayRides: sql<number>`count(*)::int`,
+    }).from(ridesTable).where(
+      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.createdAt} >= ${startOfDay}`
+    );
+
     res.json({
       totalRides: totals?.totalRides ?? 0,
       totalEarnings: totals?.totalEarnings ?? 0,
@@ -70,6 +77,7 @@ router.get("/rides/driver/stats", authenticate, async (req: AuthRequest, res) =>
       weekEarnings: weekly?.weekEarnings ?? 0,
       monthRides: monthly?.monthRides ?? 0,
       monthEarnings: monthly?.monthEarnings ?? 0,
+      todayRides: today?.todayRides ?? 0,
       rating: driver?.driverRating ?? 5.0,
     });
   } catch (err) {
