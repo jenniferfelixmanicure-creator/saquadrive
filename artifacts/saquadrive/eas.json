@@ -8,9 +8,6 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
-      "hooks": {
-        "pre_install": "pnpm install --no-frozen-lockfile"
-      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://saquadrive.onrender.com"
       }
@@ -21,18 +18,12 @@
       "android": {
         "buildType": "apk"
       },
-      "hooks": {
-        "pre_install": "pnpm install --no-frozen-lockfile"
-      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://saquadrive.onrender.com"
       }
     },
     "production": {
       "channel": "production",
-      "hooks": {
-        "pre_install": "pnpm install --no-frozen-lockfile"
-      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://saquadrive.onrender.com"
       }
