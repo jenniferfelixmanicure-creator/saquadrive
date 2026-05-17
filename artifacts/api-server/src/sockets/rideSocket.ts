@@ -269,13 +269,13 @@ export function registerRideSocket(io: Server) {
           id: data.rideId,
           passengerId: parseInt(data.passengerId) || null,
           originAddress: origin.address,
-          originLat: String(origin.lat),
-          originLng: String(origin.lng),
+          originLat: origin.lat,
+          originLng: origin.lng,
           destAddress: destination.address,
-          destLat: String(destination.lat),
-          destLng: String(destination.lng),
+          destLat: destination.lat,
+          destLng: destination.lng,
           rideType: data.rideType as "moto" | "basico" | "intermediario" | "vip",
-          price: String(serverPrice),
+          price: serverPrice,
           distance: data.distance,
           duration: data.duration,
           status: "finding",
@@ -331,7 +331,6 @@ export function registerRideSocket(io: Server) {
         await db.update(ridesTable).set({
           driverId: parseInt(acceptingDriver.driverId) || null,
           status: "accepted",
-          updatedAt: new Date(),
         }).where(eq(ridesTable.id, rideId));
       } catch (err) {
         logger.error({ err }, "Erro ao atualizar corrida aceita");
@@ -394,7 +393,7 @@ export function registerRideSocket(io: Server) {
 
       logger.info({ rideId }, "Viagem iniciada");
       io.to(active.passengerSocketId).emit("passenger:trip_started", { rideId });
-      await db.update(ridesTable).set({ status: "in_progress", updatedAt: new Date() }).where(eq(ridesTable.id, rideId)).catch(() => {});
+      await db.update(ridesTable).set({ status: "in_progress" }).where(eq(ridesTable.id, rideId)).catch(() => {});
     });
 
     socket.on("driver:complete_trip", async ({ rideId }: { rideId: string }) => {
@@ -408,7 +407,6 @@ export function registerRideSocket(io: Server) {
         await db.update(ridesTable).set({
           status: "completed",
           completedAt: new Date(),
-          updatedAt: new Date(),
         }).where(eq(ridesTable.id, rideId));
 
         const driverUserId = parseInt(active.driverId);
@@ -429,7 +427,7 @@ export function registerRideSocket(io: Server) {
       io.to(active.passengerSocketId).emit("passenger:ride_cancelled_by_driver", { rideId });
       activeRides.delete(rideId);
       logger.info({ rideId }, "Corrida cancelada pelo motorista");
-      await db.update(ridesTable).set({ status: "cancelled", driverId: null, updatedAt: new Date() }).where(eq(ridesTable.id, rideId)).catch(() => {});
+      await db.update(ridesTable).set({ status: "cancelled", driverId: null }).where(eq(ridesTable.id, rideId)).catch(() => {});
     });
 
     socket.on("passenger:cancel", async ({ rideId }: { rideId: string }) => {
@@ -443,7 +441,7 @@ export function registerRideSocket(io: Server) {
         activeRides.delete(rideId);
         logger.info({ rideId }, "Corrida cancelada (ativa)");
       }
-      await db.update(ridesTable).set({ status: "cancelled", updatedAt: new Date() }).where(eq(ridesTable.id, rideId)).catch(() => {});
+      await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, rideId)).catch(() => {});
     });
 
     socket.on("driver:update_location", ({ driverId, latitude, longitude }: { driverId: string; latitude: number; longitude: number }) => {
