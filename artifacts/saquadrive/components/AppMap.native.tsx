@@ -113,6 +113,7 @@ import React, { useEffect, useRef, useState } from "react";
     // v11: Layer com type="line" (era LineLayer)
     const Layer = MapLibreGL.Layer;
     const Camera = MapLibreGL.Camera;
+    const UserLocation = MapLibreGL.UserLocation;
 
     return (
       <View style={styles.container}>
@@ -127,6 +128,9 @@ import React, { useEffect, useRef, useState } from "react";
             center={center}
             zoom={14}
           />
+
+          {/* Ponto azul da localização atual do usuário (GPS nativo) */}
+          <UserLocation visible={true} />
 
           {origin && (
             <Marker id="origin" coordinate={[origin.lng, origin.lat]}>
