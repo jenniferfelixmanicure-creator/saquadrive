@@ -1,6 +1,7 @@
 import { httpServer } from "./app.js";
 import { logger } from "./lib/logger.js";
 import { runMigrations } from "./lib/migrate.js";
+import { seedAdmin } from "./lib/seed.js";
 
 const rawPort = process.env["PORT"];
 
@@ -20,6 +21,12 @@ try {
   await runMigrations(logger);
 } catch (err) {
   logger.error({ err }, "Migration failed — starting server anyway");
+}
+
+try {
+  await seedAdmin(logger);
+} catch (err) {
+  logger.error({ err }, "Admin seed failed — starting server anyway");
 }
 
 httpServer.listen(port, () => {
