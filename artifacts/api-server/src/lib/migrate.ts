@@ -2,6 +2,7 @@ import { pool } from "@workspace/db";
 import type { Logger } from "pino";
 
 const SQL = `
+-- Criar tabelas caso não existam
 CREATE TABLE IF NOT EXISTS "users" (
   "id" serial PRIMARY KEY,
   "name" text NOT NULL,
@@ -10,22 +11,6 @@ CREATE TABLE IF NOT EXISTS "users" (
   "password_hash" text NOT NULL,
   "role" text NOT NULL DEFAULT 'passenger',
   "is_approved" boolean NOT NULL DEFAULT false,
-  "rg_status" text NOT NULL DEFAULT 'pending',
-  "cnh_status" text NOT NULL DEFAULT 'pending',
-  "crlv_status" text NOT NULL DEFAULT 'pending',
-  "rg_url" text,
-  "cnh_url" text,
-  "crlv_url" text,
-  "vehicle_plate" text,
-  "vehicle_model" text,
-  "vehicle_year" integer,
-  "vehicle_type" text,
-  "profile_photo_url" text,
-  "driver_rating" real NOT NULL DEFAULT 5.0,
-  "passenger_rating" real NOT NULL DEFAULT 5.0,
-  "total_rides" integer NOT NULL DEFAULT 0,
-  "subscription_active" boolean NOT NULL DEFAULT false,
-  "subscription_expires_at" timestamp,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
@@ -66,6 +51,24 @@ CREATE TABLE IF NOT EXISTS "refresh_tokens" (
   "expires_at" timestamp NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
+
+-- Adicionar colunas que podem faltar em tabelas existentes (idempotente)
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "rg_status" text NOT NULL DEFAULT 'pending';
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cnh_status" text NOT NULL DEFAULT 'pending';
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "crlv_status" text NOT NULL DEFAULT 'pending';
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "rg_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cnh_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "crlv_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_plate" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_model" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_year" integer;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_type" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "profile_photo_url" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "driver_rating" real NOT NULL DEFAULT 5.0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "passenger_rating" real NOT NULL DEFAULT 5.0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "total_rides" integer NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_active" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_expires_at" timestamp;
 `;
 
 export async function runMigrations(logger: Logger): Promise<void> {
