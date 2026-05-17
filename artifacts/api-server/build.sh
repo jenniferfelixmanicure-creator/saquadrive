@@ -21,10 +21,6 @@
   echo "==> Instalando dependências..."
   pnpm install --no-frozen-lockfile
 
-  # Sincronizar schema do banco de dados (cria/atualiza tabelas)
-  echo "==> Sincronizando schema do banco..."
-  pnpm --filter @workspace/db run push-force
-
   # Build do api-server
   echo "==> Buildando api-server..."
   pnpm --filter @workspace/api-server run build
