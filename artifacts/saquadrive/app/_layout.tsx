@@ -105,8 +105,16 @@ import * as Sentry from "@sentry/react-native";
 
     // Esconde splash imediatamente ao montar — não espera fontes nem rede
     useEffect(() => {
-      clearTimeout(_splashFailsafe);
-      try { SplashScreen.hideAsync(); } catch {}
+      const hideSplash = async () => {
+        clearTimeout(_splashFailsafe);
+        try {
+          await SplashScreen.hideAsync();
+          console.log("Splash hidden");
+        } catch (e) {
+          console.warn("Error hiding splash", e);
+        }
+      };
+      hideSplash();
     }, []);
 
     // Verifica OTA em background
