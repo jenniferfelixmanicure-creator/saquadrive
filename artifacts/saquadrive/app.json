@@ -12,12 +12,6 @@
     "runtimeVersion": {
       "policy": "appVersion"
     },
-    "updates": {
-      "enabled": true,
-      "url": "https://u.expo.dev/8bc17380-3446-4170-a3ff-8cd03b1dd776",
-      "fallbackToCacheTimeout": 0,
-      "checkAutomatically": "ON_LOAD"
-    },
     "androidStatusBar": {
       "barStyle": "light-content",
       "backgroundColor": "#00000000",
@@ -61,17 +55,15 @@
       "expo-font",
       "expo-web-browser",
       "expo-navigation-bar",
-      "expo-updates",
       "@maplibre/maplibre-react-native",
       [
         "expo-location",
         {
           "locationAlwaysPermission": "Permita que o ZeroRisco acesse sua localização para encontrar corridas próximas."
         }
-      ],
-
+      ]
     ],
-    "owner": "zerorisco",
+    "owner": "andrepita12",
     "extra": {
       "router": {},
       "expo-navigation-bar": {
@@ -80,7 +72,7 @@
         "legacyVisible": "immersive"
       },
       "eas": {
-        "projectId": "8bc17380-3446-4170-a3ff-8cd03b1dd776"
+        "projectId": "5b15ba73-cca4-4063-ad38-8cc0fa24d08c"
       }
     }
   }
