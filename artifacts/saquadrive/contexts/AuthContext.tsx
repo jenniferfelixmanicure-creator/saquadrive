@@ -50,9 +50,33 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
   const REFRESH_TOKEN_KEY = "zerorisco_refresh_token";
   const MODE_KEY = "zerorisco_mode";
 
+  function base64UrlDecode(str: string): string {
+    // Funciona em Hermes (Android/iOS) e JSC — atob não existe no JSC do Android
+    const padded = str.replace(/-/g, "+").replace(/_/g, "/").padEnd(str.length + (4 - (str.length % 4)) % 4, "=");
+    try {
+      if (typeof atob === "function") return atob(padded);
+    } catch {}
+    // Fallback manual para JSC sem atob
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+    let output = "";
+    let i = 0;
+    while (i < padded.length) {
+      const e1 = chars.indexOf(padded[i++]);
+      const e2 = chars.indexOf(padded[i++]);
+      const e3 = chars.indexOf(padded[i++]);
+      const e4 = chars.indexOf(padded[i++]);
+      output += String.fromCharCode((e1 << 2) | (e2 >> 4));
+      if (e3 !== 64) output += String.fromCharCode(((e2 & 15) << 4) | (e3 >> 2));
+      if (e4 !== 64) output += String.fromCharCode(((e3 & 3) << 6) | e4);
+    }
+    return output;
+  }
+
   function decodeJwtExpiry(token: string): number | null {
     try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
+      const segment = token.split(".")[1];
+      if (!segment) return null;
+      const payload = JSON.parse(base64UrlDecode(segment));
       return payload.exp ? payload.exp * 1000 : null;
     } catch {
       return null;
