@@ -51,6 +51,19 @@
       "bundleIdentifier": "com.zerorisco.driver.app"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0D0D0D",
+          "image": "./assets/images/splash.png",
+          "resizeMode": "cover",
+          "dark": {
+            "backgroundColor": "#0D0D0D",
+            "image": "./assets/images/splash.png",
+            "resizeMode": "cover"
+          }
+        }
+      ],
       "expo-router",
       "expo-font",
       "expo-web-browser",
