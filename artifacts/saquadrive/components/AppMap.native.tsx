@@ -8,8 +8,6 @@ const MapLibreGL = require("@maplibre/maplibre-react-native");
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { reverseGeocode } = require("@/lib/google-maps");
 
-// Configurar access token uma única vez no carregamento do módulo
-MapLibreGL.setAccessToken(null);
 
 const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
