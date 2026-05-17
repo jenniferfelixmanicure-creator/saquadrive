@@ -115,20 +115,7 @@ export default function PassengerHomeScreen() {
     return () => { socket.off("chat:message", handler); };
   }, [socket, chatOpen]);
 
-  // Listener para erros do servidor (ex: conta não aprovada)
-  useEffect(() => {
-    if (!socket) return;
-    const handler = ({ message }: { code: string; message: string }) => {
-      if (phase === "finding") {
-        setPhase("idle");
-        setDestination(null);
-        setSearchText("");
-      }
-      alert(message);
-    };
-    socket.on("passenger:error", handler);
-    return () => { socket.off("passenger:error", handler); };
-  }, [socket, phase]);
+  // passenger:error é tratado pelo RideContext — não duplicar aqui
 
   // Radar + pulse animation
   useEffect(() => {
