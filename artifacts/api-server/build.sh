@@ -1,28 +1,33 @@
 #!/bin/bash
-set -e
+  set -e
 
-echo "==> SaquaDrive API build iniciado"
-echo "==> Diretório atual: $(pwd)"
+  echo "==> SaquaDrive API build iniciado"
+  echo "==> Diretório atual: $(pwd)"
 
-# Navegar para a raiz do repositório (2 níveis acima de artifacts/api-server)
-REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-echo "==> Raiz do repositório: $REPO_ROOT"
-cd "$REPO_ROOT"
+  # Navegar para a raiz do repositório (2 níveis acima de artifacts/api-server)
+  REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+  echo "==> Raiz do repositório: $REPO_ROOT"
+  cd "$REPO_ROOT"
 
-# Instalar pnpm se não estiver disponível
-if ! command -v pnpm &> /dev/null; then
-  echo "==> Instalando pnpm..."
-  npm install -g pnpm@9
-fi
+  # Instalar pnpm se não estiver disponível
+  if ! command -v pnpm &> /dev/null; then
+    echo "==> Instalando pnpm..."
+    npm install -g pnpm@9
+  fi
 
-echo "==> pnpm version: $(pnpm --version)"
+  echo "==> pnpm version: $(pnpm --version)"
 
-# Instalar dependências do workspace
-echo "==> Instalando dependências..."
-pnpm install --no-frozen-lockfile
+  # Instalar dependências do workspace
+  echo "==> Instalando dependências..."
+  pnpm install --no-frozen-lockfile
 
-# Build do api-server
-echo "==> Buildando api-server..."
-pnpm --filter @workspace/api-server run build
+  # Sincronizar schema do banco de dados (cria/atualiza tabelas)
+  echo "==> Sincronizando schema do banco..."
+  pnpm --filter @workspace/db run push-force
 
-echo "==> Build concluído!"
+  # Build do api-server
+  echo "==> Buildando api-server..."
+  pnpm --filter @workspace/api-server run build
+
+  echo "==> Build concluído!"
+  
