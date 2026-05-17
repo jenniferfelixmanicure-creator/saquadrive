@@ -22,35 +22,27 @@ import { API_URL } from "@/constants/api";
 const ADMIN_KEY = "saquadrive_admin_secret";
 
 type DriverDetail = {
-  driver: {
-    id: number;
-    userId: number;
-    cnhStatus: string | null;
-    cnhUrl: string | null;
-    crlvStatus: string | null;
-    crlvUrl: string | null;
-    vehiclePlate: string;
-    vehicleModel: string;
-    vehicleType: string;
-    vehicleColor: string | null;
-    vehicleYear: number | null;
-    rating: string | null;
-    totalRides: number | null;
-    isApproved: boolean | null;
-    createdAt: string | null;
-  };
-  user: {
-    id: number;
-    name: string;
-    email: string;
-    phone: string;
-    rgStatus: string | null;
-    rgUrl: string | null;
-    profilePhotoUrl: string | null;
-  };
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  isApproved: boolean | null;
+  rgStatus: string | null;
+  cnhStatus: string | null;
+  crlvStatus: string | null;
+  rgUrl: string | null;
+  cnhUrl: string | null;
+  crlvUrl: string | null;
+  vehiclePlate: string | null;
+  vehicleModel: string | null;
+  vehicleType: string | null;
+  vehicleColor: string | null;
+  vehicleYear: number | null;
+  profilePhotoUrl: string | null;
+  driverRating: number | null;
+  totalRides: number | null;
+  createdAt: string | null;
 };
-
-type DocStatus = "pending" | "approved" | "rejected" | null;
 
 function StatusBadge({ status }: { status: string | null }) {
   const label = status === "approved" ? "Aprovado" : status === "rejected" ? "Rejeitado" : "Pendente";
@@ -77,7 +69,7 @@ type DocCardProps = {
 
 function DocCard({ title, subtitle, status, docUrl, onApprove, onReject, loading }: DocCardProps) {
   const [imgVisible, setImgVisible] = useState(false);
-  const fullUrl = docUrl ? `${API_URL}${docUrl}` : null;
+  const fullUrl = docUrl ? (docUrl.startsWith("http") ? docUrl : `${API_URL}${docUrl}`) : null;
 
   return (
     <View style={styles.docCard}>
@@ -188,10 +180,9 @@ function DocCard({ title, subtitle, status, docUrl, onApprove, onReject, loading
 export default function DriverReviewScreen() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const params = useLocalSearchParams<{ driverId: string; userId: string; adminSecret: string }>();
+  const params = useLocalSearchParams<{ driverId: string; adminSecret: string }>();
 
   const driverId = params.driverId;
-  const userId = params.userId;
 
   const [adminSecret, setAdminSecret] = useState<string>(params.adminSecret ?? "");
   const [data, setData] = useState<DriverDetail | null>(null);
@@ -212,31 +203,32 @@ export default function DriverReviewScreen() {
       const headers = { "x-admin-secret": adminSecret };
       const res = await fetch(`${API_URL}/api/admin/drivers/all`, { headers });
       const all = await res.json() as DriverDetail[];
-      const found = all.find((d) => String(d.driver.id) === driverId && String(d.user.id) === userId);
+      const found = all.find((d) => String(d.id) === driverId);
       if (found) setData(found);
     } catch {
       Alert.alert("Erro", "Não foi possível carregar dados do motorista.");
     } finally {
       setLoading(false);
     }
-  }, [adminSecret, driverId, userId]);
+  }, [adminSecret, driverId]);
 
   useEffect(() => { fetchDriver(); }, [fetchDriver]);
 
-  async function callApi(path: string, method = "POST", body?: object) {
-    const res = await fetch(`${API_URL}${path}`, {
-      method,
-      headers: { "x-admin-secret": adminSecret, "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    return res.json() as Promise<{ message?: string }>;
-  }
-
-  async function handleDoc(action: string, label: string) {
-    setActionLoading(action);
+  async function handleDocStatus(
+    field: "rgStatus" | "cnhStatus" | "crlvStatus",
+    status: "approved" | "rejected",
+    label: string,
+  ) {
+    const key = `${field}-${status}`;
+    setActionLoading(key);
     try {
-      const data = await callApi(`/api/admin/${action}`);
-      Alert.alert("Sucesso", data.message ?? label);
+      const res = await fetch(`${API_URL}/api/admin/drivers/${driverId}/approve`, {
+        method: "PATCH",
+        headers: { "x-admin-secret": adminSecret, "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: status }),
+      });
+      const json = await res.json() as { message?: string };
+      Alert.alert("Sucesso", json.message ?? label);
       await fetchDriver();
     } catch {
       Alert.alert("Erro", "Não foi possível executar a ação.");
@@ -245,8 +237,16 @@ export default function DriverReviewScreen() {
     }
   }
 
+  async function callApi(path: string, method = "POST") {
+    const res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers: { "x-admin-secret": adminSecret, "Content-Type": "application/json" },
+    });
+    return res.json() as Promise<{ message?: string }>;
+  }
+
   async function handleApproveAll() {
-    Alert.alert("Aprovar tudo", `Aprovar todos os documentos e liberar o motorista ${data?.user.name}?`, [
+    Alert.alert("Aprovar tudo", `Aprovar todos os documentos e liberar o motorista ${data?.name}?`, [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Aprovar tudo",
@@ -267,7 +267,7 @@ export default function DriverReviewScreen() {
   }
 
   async function handleRejectAll() {
-    Alert.alert("Rejeitar motorista", `Rejeitar ${data?.user.name} e bloquear acesso?`, [
+    Alert.alert("Rejeitar motorista", `Rejeitar ${data?.name} e bloquear acesso?`, [
       { text: "Cancelar", style: "cancel" },
       {
         text: "Rejeitar",
@@ -288,9 +288,7 @@ export default function DriverReviewScreen() {
     ]);
   }
 
-  const d = data?.driver;
-  const u = data?.user;
-  const allApproved = d?.cnhStatus === "approved" && d?.crlvStatus === "approved" && u?.rgStatus === "approved";
+  const allApproved = data?.cnhStatus === "approved" && data?.crlvStatus === "approved" && data?.rgStatus === "approved";
 
   return (
     <View style={[styles.container, { paddingTop: topPad }]}>
@@ -317,21 +315,21 @@ export default function DriverReviewScreen() {
         >
           <View style={styles.profileCard}>
             <View style={[styles.avatar, { backgroundColor: allApproved ? "#16a34a22" : "#6366f122" }]}>
-              {u!.profilePhotoUrl ? (
+              {data.profilePhotoUrl ? (
                 <Image
-                  source={{ uri: u!.profilePhotoUrl.startsWith("/uploads/") ? `${API_URL}${u!.profilePhotoUrl}` : u!.profilePhotoUrl }}
+                  source={{ uri: data.profilePhotoUrl.startsWith("/uploads/") ? `${API_URL}${data.profilePhotoUrl}` : data.profilePhotoUrl }}
                   style={styles.avatarImage}
                 />
               ) : (
                 <Text style={[styles.avatarText, { color: allApproved ? "#16a34a" : "#6366f1" }]}>
-                  {u!.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+                  {data.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
                 </Text>
               )}
             </View>
             <View style={{ gap: 4 }}>
-              <Text style={styles.profileName}>{u!.name}</Text>
-              <Text style={styles.profileSub}>{u!.email}</Text>
-              <Text style={styles.profileSub}>{u!.phone}</Text>
+              <Text style={styles.profileName}>{data.name}</Text>
+              <Text style={styles.profileSub}>{data.email}</Text>
+              <Text style={styles.profileSub}>{data.phone}</Text>
             </View>
           </View>
 
@@ -340,29 +338,29 @@ export default function DriverReviewScreen() {
             <View style={styles.vehicleRow}>
               <View style={styles.vehicleField}>
                 <Text style={styles.vehicleLabel}>Modelo</Text>
-                <Text style={styles.vehicleValue}>{d!.vehicleModel || "—"}</Text>
+                <Text style={styles.vehicleValue}>{data.vehicleModel || "—"}</Text>
               </View>
               <View style={styles.vehicleField}>
                 <Text style={styles.vehicleLabel}>Placa</Text>
-                <Text style={styles.vehicleValue}>{d!.vehiclePlate || "—"}</Text>
+                <Text style={styles.vehicleValue}>{data.vehiclePlate || "—"}</Text>
               </View>
               <View style={styles.vehicleField}>
                 <Text style={styles.vehicleLabel}>Tipo</Text>
-                <Text style={styles.vehicleValue}>{d!.vehicleType || "—"}</Text>
+                <Text style={styles.vehicleValue}>{data.vehicleType || "—"}</Text>
               </View>
             </View>
             <View style={styles.vehicleRow}>
               <View style={styles.vehicleField}>
                 <Text style={styles.vehicleLabel}>Cor</Text>
-                <Text style={styles.vehicleValue}>{d!.vehicleColor || "—"}</Text>
+                <Text style={styles.vehicleValue}>{data.vehicleColor || "—"}</Text>
               </View>
               <View style={styles.vehicleField}>
                 <Text style={styles.vehicleLabel}>Ano</Text>
-                <Text style={styles.vehicleValue}>{d!.vehicleYear ?? "—"}</Text>
+                <Text style={styles.vehicleValue}>{data.vehicleYear ?? "—"}</Text>
               </View>
               <View style={styles.vehicleField}>
                 <Text style={styles.vehicleLabel}>Corridas</Text>
-                <Text style={styles.vehicleValue}>{d!.totalRides ?? 0}</Text>
+                <Text style={styles.vehicleValue}>{data.totalRides ?? 0}</Text>
               </View>
             </View>
           </View>
@@ -372,31 +370,31 @@ export default function DriverReviewScreen() {
           <DocCard
             title="RG — Documento de Identidade"
             subtitle="Exigido para todos os motoristas"
-            status={u!.rgStatus}
-            docUrl={u!.rgUrl}
-            loading={actionLoading === `rg-approve` || actionLoading === `rg-reject`}
-            onApprove={() => handleDoc(`users/${userId}/approve-rg`, "RG aprovado.")}
-            onReject={() => handleDoc(`users/${userId}/reject-rg`, "RG rejeitado.")}
+            status={data.rgStatus}
+            docUrl={data.rgUrl}
+            loading={actionLoading === "rgStatus-approved" || actionLoading === "rgStatus-rejected"}
+            onApprove={() => handleDocStatus("rgStatus", "approved", "RG aprovado.")}
+            onReject={() => handleDocStatus("rgStatus", "rejected", "RG rejeitado.")}
           />
 
           <DocCard
             title="CNH — Carteira de Habilitação"
             subtitle="Exigida para motoristas"
-            status={d!.cnhStatus}
-            docUrl={d!.cnhUrl}
-            loading={actionLoading === `cnh-approve` || actionLoading === `cnh-reject`}
-            onApprove={() => handleDoc(`drivers/${driverId}/approve-cnh`, "CNH aprovada.")}
-            onReject={() => handleDoc(`drivers/${driverId}/reject-cnh`, "CNH rejeitada.")}
+            status={data.cnhStatus}
+            docUrl={data.cnhUrl}
+            loading={actionLoading === "cnhStatus-approved" || actionLoading === "cnhStatus-rejected"}
+            onApprove={() => handleDocStatus("cnhStatus", "approved", "CNH aprovada.")}
+            onReject={() => handleDocStatus("cnhStatus", "rejected", "CNH rejeitada.")}
           />
 
           <DocCard
             title="CRLV — Documento do Veículo"
             subtitle="Certificado de registro e licenciamento"
-            status={d!.crlvStatus}
-            docUrl={d!.crlvUrl}
-            loading={actionLoading === `crlv-approve` || actionLoading === `crlv-reject`}
-            onApprove={() => handleDoc(`drivers/${driverId}/approve-crlv`, "CRLV aprovado.")}
-            onReject={() => handleDoc(`drivers/${driverId}/reject-crlv`, "CRLV rejeitado.")}
+            status={data.crlvStatus}
+            docUrl={data.crlvUrl}
+            loading={actionLoading === "crlvStatus-approved" || actionLoading === "crlvStatus-rejected"}
+            onApprove={() => handleDocStatus("crlvStatus", "approved", "CRLV aprovado.")}
+            onReject={() => handleDocStatus("crlvStatus", "rejected", "CRLV rejeitado.")}
           />
 
           <View style={styles.globalActions}>
