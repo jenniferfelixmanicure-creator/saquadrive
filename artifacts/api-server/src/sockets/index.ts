@@ -65,14 +65,8 @@ export function initSockets(io: Server, logger: Logger) {
           if (user) rating = user.driverRating;
         }
         onlineDrivers.set(socket.id, {
-          socketId: socket.id,
-          userId: data.driverId,
-          name: data.name,
-          rating,
-          car: data.car,
-          color: data.color,
-          plate: data.plate,
-          photo: data.photo,
+          socketId: socket.id, userId: data.driverId, name: data.name,
+          rating, car: data.car, color: data.color, plate: data.plate, photo: data.photo,
         });
         logger.info({ driverId: data.driverId, total: onlineDrivers.size }, "Driver online");
       } catch (err) {
@@ -106,16 +100,9 @@ export function initSockets(io: Server, logger: Logger) {
       const ride = { ...data, passengerSocketId: socket.id, notifiedDrivers: [] as string[] };
       pendingRides.set(data.rideId, ride);
       const driverData = {
-        rideId: data.rideId,
-        passengerId: data.passengerId,
-        passengerName: data.passengerName,
-        origin: data.origin,
-        destination: data.destination,
-        rideType: data.rideType,
-        price: data.price,
-        distance: data.distance,
-        distanceKm: data.distanceKm,
-        duration: data.duration,
+        rideId: data.rideId, passengerId: data.passengerId, passengerName: data.passengerName,
+        origin: data.origin, destination: data.destination, rideType: data.rideType,
+        price: data.price, distance: data.distance, distanceKm: data.distanceKm, duration: data.duration,
       };
       for (const driver of available) {
         io.to(driver.socketId).emit("driver:ride_request", driverData);
@@ -126,40 +113,17 @@ export function initSockets(io: Server, logger: Logger) {
 
     socket.on("driver:accept", async (data: { rideId: string }) => {
       const ride = pendingRides.get(data.rideId);
-      if (!ride) {
-        socket.emit("driver:error", { code: "NOT_FOUND", message: "Corrida não disponível" });
-        return;
-      }
+      if (!ride) { socket.emit("driver:error", { code: "NOT_FOUND", message: "Corrida não disponível" }); return; }
       const driver = onlineDrivers.get(socket.id);
-      if (!driver) {
-        socket.emit("driver:error", { code: "NOT_DRIVER", message: "Motorista não identificado" });
-        return;
-      }
+      if (!driver) { socket.emit("driver:error", { code: "NOT_DRIVER", message: "Motorista não identificado" }); return; }
       pendingRides.delete(data.rideId);
-      activeRides.set(data.rideId, {
-        driverSocketId: socket.id,
-        passengerSocketId: ride.passengerSocketId,
-        driverUserId: driver.userId,
-      });
+      activeRides.set(data.rideId, { driverSocketId: socket.id, passengerSocketId: ride.passengerSocketId, driverUserId: driver.userId });
       const eta = Math.floor(Math.random() * 8) + 2;
       io.to(ride.passengerSocketId).emit("passenger:driver_found", {
         rideId: data.rideId,
-        driver: {
-          id: driver.userId,
-          name: driver.name,
-          rating: driver.rating,
-          car: driver.car,
-          color: driver.color,
-          plate: driver.plate,
-          eta,
-          photo: driver.photo,
-        },
+        driver: { id: driver.userId, name: driver.name, rating: driver.rating, car: driver.car, color: driver.color, plate: driver.plate, eta, photo: driver.photo },
       });
-      io.to(ride.passengerSocketId).emit("passenger:price_confirmed", {
-        rideId: data.rideId,
-        price: ride.price,
-        pin: ride.pin,
-      });
+      io.to(ride.passengerSocketId).emit("passenger:price_confirmed", { rideId: data.rideId, price: ride.price, pin: ride.pin });
       for (const otherId of ride.notifiedDrivers) {
         if (otherId !== socket.id) {
           io.to(otherId).emit("driver:ride_accepted_by_other", { rideId: data.rideId });
@@ -185,8 +149,7 @@ export function initSockets(io: Server, logger: Logger) {
       if (ride) io.to(ride.passengerSocketId).emit("passenger:driver_arrived", { rideId: data.rideId });
     });
 
-    socket.on("driver:start_trip", async (data: { rideId: string; pin: string }) => {
-      const activeRide = pendingRides.get(data.rideId) ?? null;
+    socket.on("driver:start_trip", (data: { rideId: string; pin: string }) => {
       const ride = activeRides.get(data.rideId);
       if (!ride) return;
       const pendingData = pendingRides.get(data.rideId);
@@ -204,16 +167,6 @@ export function initSockets(io: Server, logger: Logger) {
       if (!ride) return;
       io.to(ride.passengerSocketId).emit("passenger:trip_completed", { rideId: data.rideId });
       activeRides.delete(data.rideId);
-      const driver = onlineDrivers.get(socket.id);
-      try {
-        const driverId = driver ? Number(driver.userId) : null;
-        if (driverId) {
-          const pending = pendingRides.get(data.rideId);
-          await db.update(usersTable)
-            .set({ totalRides: eq(usersTable.id, driverId) as unknown as number })
-            .where(eq(usersTable.id, driverId));
-        }
-      } catch {}
       logger.info({ rideId: data.rideId }, "Trip completed");
     });
 
@@ -233,9 +186,7 @@ export function initSockets(io: Server, logger: Logger) {
     socket.on("passenger:cancel", (data: { rideId: string }) => {
       const pending = pendingRides.get(data.rideId);
       if (pending) {
-        for (const driverId of pending.notifiedDrivers) {
-          io.to(driverId).emit("driver:ride_cancelled", { rideId: data.rideId });
-        }
+        for (const driverId of pending.notifiedDrivers) io.to(driverId).emit("driver:ride_cancelled", { rideId: data.rideId });
         pendingRides.delete(data.rideId);
       }
       const active = activeRides.get(data.rideId);
