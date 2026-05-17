@@ -2,11 +2,11 @@ import { Router } from "express";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { usersTable, ridesTable } from "@workspace/db";
-import { authenticate, requireRole, type AuthRequest } from "../middlewares/authenticate.js";
+import { authenticateAdmin, type AuthRequest } from "../middlewares/authenticate.js";
 
 const router = Router();
 
-router.use(authenticate, requireRole("admin"));
+router.use(authenticateAdmin);
 
 router.get("/admin/stats", async (req: AuthRequest, res) => {
   try {
