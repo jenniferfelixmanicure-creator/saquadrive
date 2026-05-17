@@ -1,0 +1,85 @@
+{
+  "expo": {
+    "name": "ZeroRisco",
+    "slug": "zerorisco-saquarema",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "zerorisco",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": false,
+    "backgroundColor": "#0D0D0D",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/8bc17380-3446-4170-a3ff-8cd03b1dd776",
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "NEVER"
+    },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#00000000",
+      "translucent": true
+    },
+    "androidNavigationBar": {
+      "visible": "immersive",
+      "barStyle": "dark-content",
+      "backgroundColor": "#00000000"
+    },
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0D0D0D"
+    },
+    "android": {
+      "package": "com.zerorisco.driver.app",
+      "softwareKeyboardLayoutMode": "pan",
+      "splash": {
+        "image": "./assets/images/splash.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0D0D0D"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.FOREGROUND_SERVICE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#0D0D0D"
+      }
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zerorisco.driver.app"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-web-browser",
+      "expo-navigation-bar",
+      "expo-updates",
+      [
+        "expo-location",
+        {
+          "locationAlwaysPermission": "Permita que o ZeroRisco acesse sua localização para encontrar corridas próximas."
+        }
+      ]
+    ],
+    "owner": "zerorisco",
+    "extra": {
+      "router": {},
+      "expo-navigation-bar": {
+        "backgroundColor": "#00000000",
+        "barStyle": "dark",
+        "legacyVisible": "immersive"
+      },
+      "eas": {
+        "projectId": "8bc17380-3446-4170-a3ff-8cd03b1dd776"
+      }
+    }
+  }
+}
