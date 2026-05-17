@@ -45,6 +45,8 @@ jobs:
       - name: Expo Prebuild
         working-directory: artifacts/saquadrive
         run: npx expo prebuild --platform android --no-install
+      - name: Desativar Nova Arquitetura no gradle.properties
+        run: sed -i "s/newArchEnabled=true/newArchEnabled=false/" artifacts/saquadrive/android/gradle.properties
 
       - name: Build APK Debug
         working-directory: artifacts/saquadrive/android
