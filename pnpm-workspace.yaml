@@ -160,6 +160,6 @@ overrides:
   esbuild: "0.27.3"
 
 allowBuilds:
-  '@sentry/cli': set this to true or false
-  dtrace-provider: set this to true or false
-  esbuild: set this to true or false
+  '@sentry/cli': false
+  dtrace-provider: false
+  esbuild: false
