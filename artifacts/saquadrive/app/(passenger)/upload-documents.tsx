@@ -50,12 +50,12 @@ export default function UploadDocumentsScreen() {
       const formData = new FormData();
       const filename = uri.split("/").pop() ?? `${docType}.jpg`;
       const ext = filename.split(".").pop() ?? "jpg";
-      formData.append(docType, { uri, name: filename, type: `image/${ext}` } as unknown as Blob);
+      formData.append("file", { uri, name: filename, type: `image/${ext}` } as unknown as Blob);
 
       let endpoint = "";
-      if (docType === "rg") endpoint = `/api/documents/upload-rg/${user!.id}`;
-      else if (docType === "cnh") endpoint = `/api/documents/upload-cnh/${user!.id}`;
-      else endpoint = `/api/documents/upload-crlv/${user!.id}`;
+      if (docType === "rg") endpoint = `/api/documents/upload-rg`;
+      else if (docType === "cnh") endpoint = `/api/documents/upload-cnh`;
+      else endpoint = `/api/documents/upload-crlv`;
 
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
