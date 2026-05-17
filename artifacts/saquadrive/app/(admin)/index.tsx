@@ -22,34 +22,30 @@ const ADMIN_KEY = "saquadrive_admin_secret";
 
 type Stats = {
   totalUsers: number;
-  totalDrivers: number;
-  pendingUsers: number;
   pendingDrivers: number;
   totalRides: number;
-  completedRides: number;
+  totalRevenue: number;
 };
 
 type PendingDriver = {
-  driver: {
-    id: number;
-    userId: number;
-    cnhStatus: string | null;
-    crlvStatus: string | null;
-    vehiclePlate: string;
-    vehicleModel: string;
-    vehicleType: string;
-    isApproved: boolean | null;
-    createdAt: string | null;
-  };
-  user: {
-    id: number;
-    name: string;
-    email: string;
-    phone: string;
-    rgStatus: string | null;
-    rgUrl: string | null;
-    profilePhotoUrl: string | null;
-  };
+  id: number;
+  name: string;
+  email: string;
+  phone: string;
+  isApproved: boolean | null;
+  rgStatus: string | null;
+  cnhStatus: string | null;
+  crlvStatus: string | null;
+  rgUrl: string | null;
+  cnhUrl: string | null;
+  crlvUrl: string | null;
+  vehiclePlate: string | null;
+  vehicleModel: string | null;
+  vehicleType: string | null;
+  profilePhotoUrl: string | null;
+  driverRating: number | null;
+  totalRides: number | null;
+  createdAt: string | null;
 };
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -222,10 +218,8 @@ export default function AdminScreen() {
   const displayedDrivers = tab === "pending" ? pendingDrivers : allDrivers;
 
   function renderDriver({ item }: { item: PendingDriver }) {
-    const d = item.driver;
-    const u = item.user;
-    const allApproved = d.cnhStatus === "approved" && d.crlvStatus === "approved" && u.rgStatus === "approved";
-    const anyRejected = d.cnhStatus === "rejected" || d.crlvStatus === "rejected" || u.rgStatus === "rejected";
+    const allApproved = item.cnhStatus === "approved" && item.crlvStatus === "approved" && item.rgStatus === "approved";
+    const anyRejected = item.cnhStatus === "rejected" || item.crlvStatus === "rejected" || item.rgStatus === "rejected";
 
     return (
       <TouchableOpacity
@@ -235,8 +229,7 @@ export default function AdminScreen() {
           router.push({
             pathname: "/(admin)/driver-review",
             params: {
-              driverId: String(d.id),
-              userId: String(u.id),
+              driverId: String(item.id),
               adminSecret: secret!,
             },
           })
@@ -244,25 +237,25 @@ export default function AdminScreen() {
       >
         <View style={[styles.driverAvatar, { backgroundColor: allApproved ? "#16a34a22" : anyRejected ? "#dc262622" : "#6366f122" }]}>
           <Text style={[styles.driverAvatarText, { color: allApproved ? "#16a34a" : anyRejected ? "#dc2626" : "#6366f1" }]}>
-            {u.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+            {item.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
           </Text>
         </View>
 
         <View style={styles.driverInfo}>
-          <Text style={styles.driverName}>{u.name}</Text>
-          <Text style={styles.driverSub}>{d.vehicleModel} · {d.vehiclePlate}</Text>
+          <Text style={styles.driverName}>{item.name}</Text>
+          <Text style={styles.driverSub}>{item.vehicleModel} · {item.vehiclePlate}</Text>
           <View style={styles.docBadges}>
             <View style={styles.docBadgeRow}>
               <Text style={styles.docBadgeLabel}>RG</Text>
-              <StatusBadge status={u.rgStatus} />
+              <StatusBadge status={item.rgStatus} />
             </View>
             <View style={styles.docBadgeRow}>
               <Text style={styles.docBadgeLabel}>CNH</Text>
-              <StatusBadge status={d.cnhStatus} />
+              <StatusBadge status={item.cnhStatus} />
             </View>
             <View style={styles.docBadgeRow}>
               <Text style={styles.docBadgeLabel}>CRLV</Text>
-              <StatusBadge status={d.crlvStatus} />
+              <StatusBadge status={item.crlvStatus} />
             </View>
           </View>
         </View>
@@ -291,7 +284,7 @@ export default function AdminScreen() {
       ) : (
         <FlatList
           data={displayedDrivers}
-          keyExtractor={(item) => String(item.driver.id)}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderDriver}
           refreshControl={
             <RefreshControl
@@ -305,9 +298,9 @@ export default function AdminScreen() {
               {stats && (
                 <View style={styles.statsGrid}>
                   <StatCard label="Usuários" value={Number(stats.totalUsers)} color="#6366f1" />
-                  <StatCard label="Motoristas" value={Number(stats.totalDrivers)} color="#0ea5e9" />
+                  <StatCard label="Motoristas" value={allDrivers.length} color="#0ea5e9" />
                   <StatCard label="Pendentes" value={Number(stats.pendingDrivers)} color="#d97706" />
-                  <StatCard label="Corridas" value={Number(stats.completedRides)} color="#16a34a" />
+                  <StatCard label="Corridas" value={Number(stats.totalRides)} color="#16a34a" />
                 </View>
               )}
 
