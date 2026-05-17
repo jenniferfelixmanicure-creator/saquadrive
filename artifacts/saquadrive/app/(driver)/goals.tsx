@@ -18,7 +18,7 @@ import { API_URL } from "@/constants/api";
 
 type DriverStats = {
   todayRides: number;
-  todayFiveStars: number;
+  weekRides: number;
   totalRides: number;
 };
 
@@ -86,7 +86,7 @@ export default function DriverGoalsScreen() {
       icon: "star",
       title: "Avaliação 5★",
       desc: "Receba avaliações 5 estrelas hoje",
-      current: stats?.todayFiveStars ?? 0,
+      current: 0,
       target: 5,
       unit: "avaliações",
       reward: "R$ 10,00 bônus",
