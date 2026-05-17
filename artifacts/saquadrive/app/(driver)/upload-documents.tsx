@@ -52,10 +52,14 @@ export default function UploadDocumentsScreen() {
       const ext = filename.split(".").pop() ?? "jpg";
       formData.append(docType, { uri, name: filename, type: `image/${ext}` } as unknown as Blob);
 
+      if (!user?.id) {
+        Alert.alert("Erro", "Sessão expirada. Faça login novamente.");
+        return;
+      }
       let endpoint = "";
-      if (docType === "rg") endpoint = `/api/documents/upload-rg/${user!.id}`;
-      else if (docType === "cnh") endpoint = `/api/documents/upload-cnh/${user!.id}`;
-      else endpoint = `/api/documents/upload-crlv/${user!.id}`;
+      if (docType === "rg") endpoint = `/api/documents/upload-rg/${user.id}`;
+      else if (docType === "cnh") endpoint = `/api/documents/upload-cnh/${user.id}`;
+      else endpoint = `/api/documents/upload-crlv/${user.id}`;
 
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
