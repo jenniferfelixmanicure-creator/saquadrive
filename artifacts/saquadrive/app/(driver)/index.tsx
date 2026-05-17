@@ -878,8 +878,7 @@ export default function DriverHomeScreen() {
             </View>
 
             <Text style={styles.naDesc}>
-              Estamos revisando seus documentos.{"
-"}Em breve você poderá começar a dirigir!
+              Estamos revisando seus documentos.{"\n"}Em breve você poderá começar a dirigir!
             </Text>
 
             {/* Verificar Status button */}
@@ -915,7 +914,7 @@ export default function DriverHomeScreen() {
               </View>
               <Text style={styles.naUnderstoodText}>Entendido</Text>
             </TouchableOpacity>
-          </View>
+          </LinearGradient>
         </View>
       </Modal>
     </View>
