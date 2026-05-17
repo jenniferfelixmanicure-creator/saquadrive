@@ -29,3 +29,13 @@ export function requireRole(...roles: string[]) {
     next();
   };
 }
+
+export function authenticateAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
+  const secret = req.headers["x-admin-secret"];
+  const adminSecret = process.env.ADMIN_SECRET;
+  if (!adminSecret || secret !== adminSecret) {
+    res.status(401).json({ message: "Acesso não autorizado" });
+    return;
+  }
+  next();
+}
