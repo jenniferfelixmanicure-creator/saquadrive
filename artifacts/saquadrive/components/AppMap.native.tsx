@@ -1,8 +1,14 @@
-import React, { useRef, useEffect } from "react";
-import { StyleSheet, View } from "react-native";
-import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import MapLibreGL from "@maplibre/maplibre-react-native";
+import React, { useEffect, useRef } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { reverseGeocode } from "@/lib/google-maps";
+
+MapLibreGL.setAccessToken(null);
+
+const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 type LatLng = { lat: number; lng: number };
+
 type Props = {
   isOnline?: boolean;
   origin?: (LatLng & { address?: string }) | null;
@@ -25,143 +31,166 @@ export default function AppMap({
   driverRealtimeLocation,
   onMapPress,
 }: Props) {
-  const webRef = useRef<WebView>(null);
+  const cameraRef = useRef<MapLibreGL.Camera>(null);
 
-  const center = origin
-    ? [origin.lat, origin.lng]
+  const center: [number, number] = origin
+    ? [origin.lng, origin.lat]
     : destination
-    ? [destination.lat, destination.lng]
-    : [-22.92, -42.51];
-
-  function buildHtml(
-    orig: typeof origin,
-    dest: typeof destination,
-    route: typeof routeCoordinates,
-    driver: typeof driverRealtimeLocation,
-  ) {
-    const originJs = orig
-      ? `L.circleMarker([${orig.lat}, ${orig.lng}], {
-          color: 'white', fillColor: '${originColor}',
-          fillOpacity: 1, radius: 9, weight: 3
-        }).addTo(map).bindTooltip('Origem', {permanent:false});`
-      : '';
-    const destJs = dest
-      ? `
-        var destIcon = L.divIcon({
-          html: '<div style="width:22px;height:22px;border-radius:50%;background:${destColor};border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5)"></div>',
-          className:'', iconAnchor:[11,11]
-        });
-        L.marker([${dest.lat}, ${dest.lng}], {icon:destIcon}).addTo(map).bindTooltip('Destino', {permanent:false});
-      `
-      : '';
-    const driverJs = driver
-      ? `
-        var driverIcon = L.divIcon({
-          html: '<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.8))">🚗</div>',
-          className:'', iconAnchor:[12,12]
-        });
-        var driverMarker = L.marker([${driver.latitude}, ${driver.longitude}], {icon:driverIcon}).addTo(map);
-      `
-      : '';
-    const routeJs =
-      route && route.length > 1
-        ? `
-          var pts = ${JSON.stringify(route.map((c) => [c.latitude, c.longitude]))};
-          var poly = L.polyline(pts, {color:'${destColor}',weight:5,opacity:0.85,lineJoin:'round'}).addTo(map);
-          ${orig && dest ? `map.fitBounds(poly.getBounds(), {padding:[60,60]});` : ''}
-        `
-        : orig && dest
-        ? `map.fitBounds(L.latLngBounds([${orig.lat},${orig.lng}],[${dest.lat},${dest.lng}]),{padding:[80,80]});`
-        : '';
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body,html{height:100%;overflow:hidden;background:#0D0D0D}
-    #map{height:100vh;width:100vw;background:#0D0D0D}
-    .leaflet-tile-pane{filter:invert(100%) hue-rotate(180deg) brightness(92%) contrast(88%)}
-    .leaflet-container{background:#1a1a1a!important}
-    .leaflet-control-zoom{display:none}
-    .leaflet-control-attribution{font-size:8px;opacity:0.4;background:transparent!important;color:#fff!important}
-    .leaflet-control-attribution a{color:#aaa!important}
-  </style>
-</head>
-<body>
-<div id="map"></div>
-<script>
-  var map = L.map('map',{zoomControl:false,attributionControl:true}).setView([${center[0]},${center[1]}],15);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OSM'}).addTo(map);
-  ${originJs}
-  ${destJs}
-  ${driverJs}
-  ${routeJs}
-  map.on('click',function(e){
-    var lat=e.latlng.lat, lng=e.latlng.lng;
-    fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&accept-language=pt-BR',
-      {headers:{'User-Agent':'ZeroRisco/1.0'}})
-      .then(r=>r.json()).then(function(d){
-        var addr=d.display_name||lat.toFixed(5)+', '+lng.toFixed(5);
-        if(d.address){
-          var parts=[];
-          if(d.address.road)parts.push(d.address.road+(d.address.house_number?', '+d.address.house_number:''));
-          if(d.address.suburb)parts.push(d.address.suburb);
-          var city=d.address.city||d.address.town||d.address.village;
-          if(city)parts.push(city);
-          if(parts.length)addr=parts.join(' — ');
-        }
-        window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({lat:lat,lng:lng,address:addr}));
-      }).catch(function(){
-        window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({lat:lat,lng:lng,address:lat.toFixed(5)+', '+lng.toFixed(5)}));
-      });
-  });
-</script>
-</body>
-</html>`;
-  }
-
-  const htmlRef = useRef(buildHtml(origin, destination, routeCoordinates, driverRealtimeLocation));
+    ? [destination.lng, destination.lat]
+    : [-42.51, -22.92];
 
   useEffect(() => {
-    if (!webRef.current) return;
-    const newHtml = buildHtml(origin, destination, routeCoordinates, driverRealtimeLocation);
-    htmlRef.current = newHtml;
-    webRef.current.reload();
+    if (!cameraRef.current) return;
+
+    if (routeCoordinates && routeCoordinates.length > 1) {
+      const lons = routeCoordinates.map((c) => c.longitude);
+      const lats = routeCoordinates.map((c) => c.latitude);
+      cameraRef.current.fitBounds(
+        [Math.min(...lons), Math.min(...lats)],
+        [Math.max(...lons), Math.max(...lats)],
+        60,
+        500
+      );
+    } else if (origin && destination) {
+      cameraRef.current.fitBounds(
+        [Math.min(origin.lng, destination.lng), Math.min(origin.lat, destination.lat)],
+        [Math.max(origin.lng, destination.lng), Math.max(origin.lat, destination.lat)],
+        80,
+        500
+      );
+    } else if (driverRealtimeLocation) {
+      cameraRef.current.setCamera({
+        centerCoordinate: [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
+        zoomLevel: 15,
+        animationDuration: 500,
+      });
+    }
   }, [
-    origin?.lat, origin?.lng,
-    destination?.lat, destination?.lng,
-    driverRealtimeLocation?.latitude, driverRealtimeLocation?.longitude,
+    origin?.lat,
+    origin?.lng,
+    destination?.lat,
+    destination?.lng,
+    driverRealtimeLocation?.latitude,
+    driverRealtimeLocation?.longitude,
     routeCoordinates?.length,
   ]);
 
-  function handleMessage(e: WebViewMessageEvent) {
+  const routeGeoJSON: GeoJSON.Feature<GeoJSON.LineString> | null =
+    routeCoordinates && routeCoordinates.length > 1
+      ? {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: routeCoordinates.map((c) => [c.longitude, c.latitude]),
+          },
+        }
+      : null;
+
+  async function handleMapPress(feature: GeoJSON.Feature) {
     if (!onMapPress) return;
-    try {
-      const data = JSON.parse(e.nativeEvent.data);
-      onMapPress(data);
-    } catch {}
+    const coords = (feature.geometry as GeoJSON.Point).coordinates;
+    const lng = coords[0];
+    const lat = coords[1];
+    const address = await reverseGeocode(lat, lng);
+    onMapPress({ lat, lng, address });
   }
 
   return (
     <View style={styles.container}>
-      <WebView
-        ref={webRef}
-        originWhitelist={['*']}
-        source={{ html: htmlRef.current }}
+      <MapLibreGL.MapView
         style={styles.map}
-        javaScriptEnabled
-        domStorageEnabled
-        onMessage={handleMessage}
-      />
+        styleURL={STYLE_URL}
+        onPress={onMapPress ? handleMapPress : undefined}
+        logoEnabled={false}
+        attributionEnabled={false}
+        compassEnabled={false}
+      >
+        <MapLibreGL.Camera
+          ref={cameraRef}
+          centerCoordinate={center}
+          zoomLevel={14}
+          animationMode="flyTo"
+          animationDuration={400}
+        />
+
+        {origin && (
+          <MapLibreGL.PointAnnotation
+            id="origin"
+            coordinate={[origin.lng, origin.lat]}
+          >
+            <View style={[styles.markerOuter, { borderColor: "white" }]}>
+              <View style={[styles.markerInner, { backgroundColor: originColor }]} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
+
+        {destination && (
+          <MapLibreGL.PointAnnotation
+            id="destination"
+            coordinate={[destination.lng, destination.lat]}
+          >
+            <View style={[styles.markerOuter, { borderColor: "white" }]}>
+              <View style={[styles.markerInner, { backgroundColor: destColor }]} />
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
+
+        {driverRealtimeLocation && (
+          <MapLibreGL.PointAnnotation
+            id="driver"
+            coordinate={[driverRealtimeLocation.longitude, driverRealtimeLocation.latitude]}
+          >
+            <View style={styles.driverMarker}>
+              <Text style={styles.driverEmoji}>🚗</Text>
+            </View>
+          </MapLibreGL.PointAnnotation>
+        )}
+
+        {routeGeoJSON && (
+          <MapLibreGL.ShapeSource id="route" shape={routeGeoJSON}>
+            <MapLibreGL.LineLayer
+              id="routeLine"
+              style={{
+                lineColor: destColor,
+                lineWidth: 5,
+                lineOpacity: 0.85,
+                lineCap: "round",
+                lineJoin: "round",
+              }}
+            />
+          </MapLibreGL.ShapeSource>
+        )}
+      </MapLibreGL.MapView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0D0D0D' },
+  container: { flex: 1, backgroundColor: "#0D0D0D" },
   map: { flex: 1 },
+  markerOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 3,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  markerInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  driverMarker: {
+    width: 34,
+    height: 34,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  driverEmoji: {
+    fontSize: 26,
+    lineHeight: 30,
+  },
 });
