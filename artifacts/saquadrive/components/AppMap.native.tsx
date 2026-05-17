@@ -1,6 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+// Importações no nível do módulo — chamar require() dentro do corpo de um
+// componente crasha no Android com New Architecture (TurboModules).
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const MapLibreGL = require("@maplibre/maplibre-react-native");
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { reverseGeocode } = require("@/lib/google-maps");
+
+// Configurar access token uma única vez no carregamento do módulo
+MapLibreGL.setAccessToken(null);
+
+const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
 type LatLng = { lat: number; lng: number };
 
 type Props = {
@@ -16,22 +28,7 @@ type Props = {
   onMapPress?: (loc: { address: string; lat: number; lng: number }) => void;
 };
 
-function MapFallback() {
-  return (
-    <View style={[styles.container, styles.fallback]}>
-      <Text style={styles.fallbackText}>🗺️</Text>
-      <Text style={styles.fallbackLabel}>Mapa carregando...</Text>
-    </View>
-  );
-}
-
 function MapLibreMap(props: Props) {
-  const MapLibreGL = require("@maplibre/maplibre-react-native");
-  const { reverseGeocode } = require("@/lib/google-maps");
-
-  MapLibreGL.setAccessToken(null);
-  const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
-
   const {
     origin, destination,
     originColor = "#FF6B00", destColor = "#00C4FF",
