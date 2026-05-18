@@ -178,7 +178,7 @@ export function registerRideSocket(io: Server) {
         return;
       }
 
-      let passengerRating = 5.0, passengerTotalRides = 0, passengerPhotoUrl: string | null = null;
+      let passengerRating = 5.0, passengerTotalRides = 0, passengerPhotoUrl: string | null = null, passengerNameFromDb: string | null = null;
       try {
         const passengerId = parseInt(data.passengerId);
         if (!isNaN(passengerId)) {
@@ -186,6 +186,7 @@ export function registerRideSocket(io: Server) {
             isApproved: usersTable.isApproved,
             suspended: usersTable.suspended,
             cancellationFeeOwed: usersTable.cancellationFeeOwed,
+            name: usersTable.name,
             passengerRating: usersTable.passengerRating,
             totalRides: usersTable.totalRides,
             profilePhotoUrl: usersTable.profilePhotoUrl,
@@ -206,6 +207,7 @@ export function registerRideSocket(io: Server) {
           passengerRating = passenger?.passengerRating ?? 5.0;
           passengerTotalRides = passenger?.totalRides ?? 0;
           passengerPhotoUrl = passenger?.profilePhotoUrl ?? null;
+          if (passenger?.name) passengerNameFromDb = passenger.name;
         }
       } catch (err) { logger.error({ err }, "Erro ao verificar passageiro"); }
 
@@ -216,7 +218,9 @@ export function registerRideSocket(io: Server) {
       const ridePin = data.pin ?? Math.floor(1000 + Math.random() * 9000).toString();
 
       const ride: RideRequest = {
-        ...data, price: serverPrice, distanceKm, passengerSocketId: socket.id, pin: ridePin,
+        ...data,
+        passengerName: passengerNameFromDb ?? data.passengerName,
+        price: serverPrice, distanceKm, passengerSocketId: socket.id, pin: ridePin,
         passengerRating, passengerTotalRides, passengerPhotoUrl,
       };
 
