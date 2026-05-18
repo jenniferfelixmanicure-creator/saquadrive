@@ -185,7 +185,7 @@ export default function DriverProfileScreen() {
         </View>
 
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Row icon="map-pin" label="Modo Passageiro" onPress={() => router.replace("/")} colors={colors} />
+          <Row icon="map-pin" label="Modo Passageiro" onPress={async () => { await logout(); router.replace("/(auth)/login"); }} colors={colors} />
           <Row icon="bell" label="Notificações" onPress={() => router.push("/(driver)/notifications")} colors={colors} />
           <Row icon="help-circle" label="Suporte" onPress={() => router.push("/(driver)/help-support")} colors={colors} />
         </View>
