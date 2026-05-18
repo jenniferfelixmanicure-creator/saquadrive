@@ -460,7 +460,11 @@ export function registerRideSocket(io: Server) {
   });
 }
 
-function dispatchToDriver(io: Server, ride: RideRequest, driver: DriverInfo) {
+function dispatchToDriver(io: Server, ride: RideRequest, driver: DriverInfo & { distanceToPassenger: number }) {
+  const distKm = driver.distanceToPassenger;
+  const distLabel = distKm < 1
+    ? String(Math.round(distKm * 1000)) + " m de você"
+    : distKm.toFixed(1) + " km de você";
   io.to(driver.socketId).emit("driver:ride_request", {
     rideId: ride.rideId,
     passenger: ride.passengerName ?? "Passageiro",
@@ -468,7 +472,7 @@ function dispatchToDriver(io: Server, ride: RideRequest, driver: DriverInfo) {
     passengerTotalRides: ride.passengerTotalRides ?? 0,
     passengerPhotoUrl: ride.passengerPhotoUrl ?? null,
     origin: ride.origin, destination: ride.destination,
-    distance: ride.distance, price: ride.price,
+    distance: ride.distance, distanceToPassenger: distLabel, price: ride.price,
     rideType: ride.rideType, eta: driver.eta,
   });
 }
