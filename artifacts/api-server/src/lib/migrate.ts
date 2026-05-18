@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS "ratings" (
   "rated_id" integer REFERENCES "users"("id"),
   "rater_id" integer REFERENCES "users"("id"),
   "stars" integer NOT NULL,
+  "comment" text,
   "role" text NOT NULL,
   "created_at" timestamp NOT NULL DEFAULT now()
 );
@@ -52,7 +53,30 @@ CREATE TABLE IF NOT EXISTS "refresh_tokens" (
   "created_at" timestamp NOT NULL DEFAULT now()
 );
 
--- Adicionar colunas que podem faltar em tabelas existentes (idempotente)
+CREATE TABLE IF NOT EXISTS "chat_messages" (
+  "id" serial PRIMARY KEY,
+  "sender_id" text NOT NULL,
+  "sender_name" text NOT NULL,
+  "receiver_id" text,
+  "message" text NOT NULL,
+  "timestamp" timestamp DEFAULT now(),
+  "ride_id" text
+);
+
+CREATE TABLE IF NOT EXISTS "promo_codes" (
+  "id" serial PRIMARY KEY,
+  "code" text NOT NULL UNIQUE,
+  "description" text,
+  "discount_type" text NOT NULL DEFAULT 'fixed',
+  "discount_value" real NOT NULL,
+  "is_active" boolean NOT NULL DEFAULT true,
+  "max_uses" integer,
+  "used_count" integer NOT NULL DEFAULT 0,
+  "expires_at" timestamp,
+  "created_at" timestamp NOT NULL DEFAULT now()
+);
+
+-- Colunas existentes (idempotente)
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "rg_status" text NOT NULL DEFAULT 'pending';
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cnh_status" text NOT NULL DEFAULT 'pending';
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "crlv_status" text NOT NULL DEFAULT 'pending';
@@ -71,34 +95,37 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "total_rides" integer NOT NULL DEFA
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_active" boolean NOT NULL DEFAULT false;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_expires_at" timestamp;
 
--- Recalcular total_rides de cada motorista baseado nas corridas concluidas reais
--- Isso corrige qualquer valor incorreto de dados anteriores
+-- NOVAS colunas
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "suspended" boolean NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cancellation_fee_owed" real NOT NULL DEFAULT 0;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "expo_push_token" text;
+
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "arrived_at" timestamp;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "cancelled_at" timestamp;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "cancelled_late" boolean NOT NULL DEFAULT false;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "wait_time_fee" real NOT NULL DEFAULT 0;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "promo_code" text;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "promo_discount" real NOT NULL DEFAULT 0;
+
+-- Recalcular métricas reais
 UPDATE "users"
 SET "total_rides" = COALESCE((
-  SELECT COUNT(*)::int
-  FROM "rides"
-  WHERE "rides"."driver_id" = "users"."id"
-    AND "rides"."status" = 'completed'
+  SELECT COUNT(*)::int FROM "rides"
+  WHERE "rides"."driver_id" = "users"."id" AND "rides"."status" = 'completed'
 ), 0)
 WHERE "role" = 'driver';
 
--- Recalcular nota media dos motoristas com base nas avaliacoes reais
 UPDATE "users"
 SET "driver_rating" = COALESCE((
   SELECT ROUND(AVG(stars)::numeric, 2)
-  FROM "ratings"
-  WHERE "ratings"."rated_id" = "users"."id"
-    AND "ratings"."role" = 'passenger'
+  FROM "ratings" WHERE "ratings"."rated_id" = "users"."id" AND "ratings"."role" = 'passenger'
 ), 5.0)
 WHERE "role" = 'driver';
 
--- Recalcular nota media dos passageiros com base nas avaliacoes reais
 UPDATE "users"
 SET "passenger_rating" = COALESCE((
   SELECT ROUND(AVG(stars)::numeric, 2)
-  FROM "ratings"
-  WHERE "ratings"."rated_id" = "users"."id"
-    AND "ratings"."role" = 'driver'
+  FROM "ratings" WHERE "ratings"."rated_id" = "users"."id" AND "ratings"."role" = 'driver'
 ), 5.0)
 WHERE "role" = 'passenger' OR "role" = 'driver';
 `;
