@@ -14,7 +14,7 @@ import { useRide, Location2 as Location, RideType } from "@/contexts/RideContext
 import { useSocket } from "@/contexts/SocketContext";
 import { useColors } from "@/hooks/useColors";
 import RideChat, { ChatMessage } from "@/components/RideChat";
-import { searchPlaces, getPlaceDetails, getRoute, reverseGeocode } from "@/lib/google-maps";
+import { searchPlaces, getPlaceDetails, getRoute } from "@/lib/google-maps";
 
 
 type RideOption = { type: RideType; label: string; desc: string };
@@ -65,8 +65,6 @@ export default function PassengerHomeScreen() {
   const [selectedRideType, setSelectedRideType] = useState<RideType>("basico");
   const [selectedStars, setSelectedStars] = useState(5);
   const [previewRouteCoords, setPreviewRouteCoords] = useState<{ latitude: number; longitude: number }[]>([]);
-  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number } | null>(null);
-  const [geocoding, setGeocoding] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const ring1Anim = useRef(new Animated.Value(0)).current;
@@ -82,13 +80,6 @@ export default function PassengerHomeScreen() {
   const origin: Location = userLocation ?? {
     address: "Sua localização", lat: -22.9200, lng: -42.5100,
   };
-
-  // Inicializa o centro do mapa com a localização do usuário
-  useEffect(() => {
-    if (userLocation && !mapCenter) {
-      setMapCenter({ lat: userLocation.lat, lng: userLocation.lng });
-    }
-  }, [userLocation]);
 
   // Sync phase com rideStatus do backend
   useEffect(() => {
@@ -280,45 +271,7 @@ export default function PassengerHomeScreen() {
         mode="passenger"
         routeCoordinates={routeCoordinates.length > 0 ? routeCoordinates : previewRouteCoords}
         driverRealtimeLocation={driverRealtimeLocation}
-        onCenterChange={
-          (phase === "idle" || phase === "typing") && user?.isApproved
-            ? (lat, lng) => setMapCenter({ lat, lng })
-            : undefined
-        }
       />
-
-      {/* Crosshair centralizado — visível ao mover o mapa para escolher destino */}
-      {(phase === "idle" || phase === "typing") && user?.isApproved && (
-        <View style={styles.crosshairWrapper} pointerEvents="none">
-          <Feather name="map-pin" size={38} color={colors.accent} style={{ marginBottom: -4 }} />
-          <View style={[styles.crosshairDot, { backgroundColor: colors.accent }]} />
-        </View>
-      )}
-
-      {/* Botão flutuante "Usar este ponto" — igual ao Uber */}
-      {(phase === "idle" || phase === "typing") && user?.isApproved && mapCenter && (
-        <TouchableOpacity
-          style={[styles.usePinBtn, { backgroundColor: colors.primary }]}
-          activeOpacity={0.85}
-          onPress={async () => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            setGeocoding(true);
-            try {
-              const address = await reverseGeocode(mapCenter.lat, mapCenter.lng);
-              setDestination({ address, lat: mapCenter.lat, lng: mapCenter.lng });
-              setSearchText(address);
-              setPhase("confirming");
-            } finally {
-              setGeocoding(false);
-            }
-          }}
-        >
-          <Feather name="crosshair" size={16} color="#fff" />
-          <Text style={styles.usePinBtnText}>
-            {geocoding ? "Buscando endereço..." : "Usar este ponto"}
-          </Text>
-        </TouchableOpacity>
-      )}
 
       {currentRide && user && (
         <RideChat
@@ -768,35 +721,6 @@ const styles = StyleSheet.create({
   emptyStateTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   emptyStateDesc: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 },
   approvalBadge: { width: 72, height: 72, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-
-  // ── Crosshair / Mapa estilo Uber ─────────────────────────────────────────────
-  crosshairWrapper: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: "45%",
-    alignItems: "center", justifyContent: "flex-end",
-    paddingBottom: 0,
-  },
-  crosshairDot: {
-    width: 8, height: 8, borderRadius: 4,
-    opacity: 0.5,
-  },
-  usePinBtn: {
-    position: "absolute",
-    bottom: "47%",
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 22,
-    paddingVertical: 13,
-    borderRadius: 28,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  usePinBtnText: { color: "#fff", fontSize: 15, fontFamily: "Inter_600SemiBold" },
 
   // ── Finding / Radar ──────────────────────────────────────────────────────────
   findingWrapper: { alignItems: "center", paddingVertical: 8, gap: 12 },
