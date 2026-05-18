@@ -29,6 +29,7 @@ export const usersTable = pgTable("users", {
   totalRides: integer("total_rides").notNull().default(0),
   subscriptionActive: boolean("subscription_active").notNull().default(false),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
+  expoPushToken: text("expo_push_token"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -64,8 +65,19 @@ export const ratingsTable = pgTable("ratings", {
   ratedId: integer("rated_id").references(() => usersTable.id),
   raterId: integer("rater_id").references(() => usersTable.id),
   stars: integer("stars").notNull(),
+  comment: text("comment"),
   role: text("role").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const chatMessagesTable = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  senderId: text("sender_id").notNull(),
+  senderName: text("sender_name").notNull(),
+  receiverId: text("receiver_id"),
+  message: text("message").notNull(),
+  timestamp: timestamp("timestamp").defaultNow(),
+  rideId: text("ride_id"),
 });
 
 export const refreshTokensTable = pgTable("refresh_tokens", {
@@ -98,4 +110,5 @@ export type User = typeof usersTable.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Ride = typeof ridesTable.$inferSelect;
 export type Rating = typeof ratingsTable.$inferSelect;
+export type ChatMessage = typeof chatMessagesTable.$inferSelect;
 export type PromoCode = typeof promoCodesTable.$inferSelect;
