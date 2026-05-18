@@ -542,7 +542,7 @@ export function registerRideSocket(io: Server) {
 function dispatchToDriver(io: Server, ride: RideRequest, driver: DriverInfo) {
   io.to(driver.socketId).emit("driver:ride_request", {
     rideId: ride.rideId,
-    passenger: ride.passengerName,
+    passenger: ride.passengerName ?? "Passageiro",
     origin: ride.origin,
     destination: ride.destination,
     distance: ride.distance,
