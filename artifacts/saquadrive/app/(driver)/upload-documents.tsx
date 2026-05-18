@@ -8,7 +8,6 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
-import { API_URL } from "@/constants/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type DocType = "rg" | "cnh" | "crlv";
@@ -16,7 +15,7 @@ type DocType = "rg" | "cnh" | "crlv";
 export default function UploadDocumentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, token, updateUserDocuments } = useAuth();
+  const { user, apiFetch, updateUserDocuments } = useAuth();
   const [loading, setLoading] = useState<DocType | null>(null);
   const [rgUri, setRgUri] = useState<string | null>(user?.rgUrl ?? null);
   const [cnhUri, setCnhUri] = useState<string | null>(user?.cnhUrl ?? null);
@@ -57,11 +56,8 @@ export default function UploadDocumentsScreen() {
       else if (docType === "cnh") endpoint = `/api/documents/upload-cnh`;
       else endpoint = `/api/documents/upload-crlv`;
 
-      const res = await fetch(`${API_URL}${endpoint}`, {
+      const res = await apiFetch(endpoint, {
         method: "POST",
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
         body: formData,
       });
 
