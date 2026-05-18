@@ -1,23 +1,19 @@
 import { Server, Socket } from "socket.io";
 import { db } from "@workspace/db";
-import { ridesTable, usersTable } from "@workspace/db/schema";
+import { ridesTable, usersTable, promoCodesTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env["JWT_SECRET"];
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET deve ser definido nas variáveis de ambiente");
-}
+if (!JWT_SECRET) throw new Error("JWT_SECRET deve ser definido nas variáveis de ambiente");
 
-const RIDE_PRICES: Record<string, number> = {
-  moto: 1.20,
-  basico: 1.70,
-  intermediario: 2.20,
-  vip: 3.90,
-};
+const RIDE_PRICES: Record<string, number> = { moto: 1.20, basico: 1.70, intermediario: 2.20, vip: 3.90 };
 const BASE_FEE = 5.5;
 const PEAK_HOURS = [{ start: 7, end: 9 }, { start: 17, end: 19 }];
+const LATE_CANCEL_FEE = 7.50;
+const WAIT_FREE_MINUTES = 2;
+const WAIT_FEE_PER_MIN = 0.30;
 
 function calculatePrice(distanceKm: number, rideType: string): { total: number; surgeMultiplier: number } {
   const perKm = RIDE_PRICES[rideType] ?? 1.70;
@@ -25,73 +21,41 @@ function calculatePrice(distanceKm: number, rideType: string): { total: number; 
   const isPeak = PEAK_HOURS.some((p) => hour >= p.start && hour <= p.end);
   const surge = isPeak ? 1.5 : 1.0;
   const raw = Math.round((BASE_FEE + distanceKm * perKm) * surge * 100) / 100;
-  const total = Math.max(raw, 10);
-  return { total, surgeMultiplier: surge };
+  return { total: Math.max(raw, 10), surgeMultiplier: surge };
 }
 
 type DriverInfo = {
-  socketId: string;
-  driverId: string;
-  name: string;
-  car: string;
-  plate: string;
-  color: string;
-  rating: number;
-  photo: string;
-  eta: number;
-  latitude: number;
-  longitude: number;
-  vehicleYear: number;
-  vehicleType: "car" | "moto";
+  socketId: string; driverId: string; name: string; car: string;
+  plate: string; color: string; rating: number; photo: string;
+  eta: number; latitude: number; longitude: number;
+  vehicleYear: number; vehicleType: "car" | "moto";
 };
 
 type RideOriginDest = { address: string; lat: number; lng: number };
 
 type RideRequest = {
-  rideId: string;
-  passengerId: string;
-  passengerName: string;
-  passengerSocketId: string;
-  origin: RideOriginDest;
-  destination: RideOriginDest;
-  rideType: string;
-  price: number;
-  distance: string;
-  distanceKm: number;
-  duration: string;
-  pin?: string;
+  rideId: string; passengerId: string; passengerName: string;
+  passengerSocketId: string; origin: RideOriginDest; destination: RideOriginDest;
+  rideType: string; price: number; distance: string; distanceKm: number;
+  duration: string; pin?: string;
+  passengerRating?: number; passengerTotalRides?: number; passengerPhotoUrl?: string | null;
 };
 
-type ChatMessage = {
-  msgId: string;
-  senderId: string;
-  senderName: string;
-  text: string;
-  timestamp: number;
-};
+type ChatMessage = { msgId: string; senderId: string; senderName: string; text: string; timestamp: number };
 
 const onlineDrivers = new Map<string, DriverInfo>();
 const pendingRides = new Map<string, RideRequest>();
-const waitingRides = new Map<string, {
-  ride: RideRequest;
-  timeoutId: ReturnType<typeof setTimeout>;
-}>();
-
-const rideRejections = new Map<string, Set<string>>(); // rideId -> Set of rejecting driverIds
-
-const activeRides = new Map<string, {
-  passengerId: string;
-  driverId: string;
-  passengerSocketId: string;
-  driverSocketId: string;
-}>();
+const waitingRides = new Map<string, { ride: RideRequest; timeoutId: ReturnType<typeof setTimeout> }>();
+const rideRejections = new Map<string, Set<string>>();
+const activeRides = new Map<string, { passengerId: string; driverId: string; passengerSocketId: string; driverSocketId: string }>();
+const rideArrivedAt = new Map<string, Date>();
+const waitTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
@@ -125,26 +89,15 @@ function getNearbyDrivers(lat: number, lng: number, rideType: string, radius = 1
 
 async function loadActiveRides() {
   try {
-    const rides = await db
-      .select({ id: ridesTable.id, passengerId: ridesTable.passengerId, driverId: ridesTable.driverId })
-      .from(ridesTable)
-      .where(eq(ridesTable.status, "in_progress"));
+    const rides = await db.select({ id: ridesTable.id, passengerId: ridesTable.passengerId, driverId: ridesTable.driverId })
+      .from(ridesTable).where(eq(ridesTable.status, "in_progress"));
     for (const ride of rides) {
       if (ride.passengerId && ride.driverId) {
-        activeRides.set(ride.id, {
-          passengerId: String(ride.passengerId),
-          driverId: String(ride.driverId),
-          passengerSocketId: "",
-          driverSocketId: "",
-        });
+        activeRides.set(ride.id, { passengerId: String(ride.passengerId), driverId: String(ride.driverId), passengerSocketId: "", driverSocketId: "" });
       }
     }
-    if (rides.length > 0) {
-      logger.info({ count: rides.length }, "Corridas ativas restauradas do banco após reinicialização");
-    }
-  } catch (err) {
-    logger.error({ err }, "Falha ao restaurar corridas ativas do banco");
-  }
+    if (rides.length > 0) logger.info({ count: rides.length }, "Corridas ativas restauradas");
+  } catch (err) { logger.error({ err }, "Falha ao restaurar corridas ativas"); }
 }
 
 export function registerRideSocket(io: Server) {
@@ -157,9 +110,7 @@ export function registerRideSocket(io: Server) {
       const payload = jwt.verify(token, JWT_SECRET) as { userId: number };
       (socket as unknown as { userId: number }).userId = payload.userId;
       next();
-    } catch {
-      next(new Error("Token inválido"));
-    }
+    } catch { next(new Error("Token inválido")); }
   });
 
   io.on("connection", (socket: Socket) => {
@@ -171,40 +122,26 @@ export function registerRideSocket(io: Server) {
         if (activeRide.passengerId === String(userId)) {
           activeRides.set(rideId, { ...activeRide, passengerSocketId: socket.id });
           socket.emit("passenger:session_restored", { rideId });
-          logger.info({ rideId, userId }, "Sessão de corrida restaurada para passageiro");
         } else if (activeRide.driverId === String(userId)) {
           activeRides.set(rideId, { ...activeRide, driverSocketId: socket.id });
           socket.emit("driver:session_restored", { rideId });
-          logger.info({ rideId, userId }, "Sessão de corrida restaurada para motorista");
         }
       }
     }
-
-    // ─── MOTORISTA ─────────────────────────────────────────────────────────────
 
     socket.on("driver:online", async (data: Omit<DriverInfo, "socketId">) => {
       try {
         const driverUserId = parseInt(data.driverId);
         if (!isNaN(driverUserId)) {
-          const [driver] = await db
-            .select({ isApproved: usersTable.isApproved })
-            .from(usersTable)
-            .where(eq(usersTable.id, driverUserId));
+          const [driver] = await db.select({ isApproved: usersTable.isApproved }).from(usersTable).where(eq(usersTable.id, driverUserId));
           if (!driver?.isApproved) {
-            socket.emit("driver:error", {
-              code: "NOT_APPROVED",
-              message: "Seus documentos ainda estão em análise. Aguarde aprovação para ficar online.",
-            });
-            logger.warn({ driverId: data.driverId }, "Driver bloqueado: não aprovado");
+            socket.emit("driver:error", { code: "NOT_APPROVED", message: "Seus documentos ainda estão em análise." });
             return;
           }
         }
-      } catch (err) {
-        logger.error({ err }, "Erro ao verificar aprovação do motorista");
-        return;
-      }
-      const info: DriverInfo = { ...data, socketId: socket.id };
-      onlineDrivers.set(data.driverId, info);
+      } catch (err) { logger.error({ err }, "Erro ao verificar aprovação"); return; }
+
+      onlineDrivers.set(data.driverId, { ...data, socketId: socket.id });
       logger.info({ driverId: data.driverId, total: onlineDrivers.size }, "Driver online");
 
       for (const [waitRideId, waiting] of waitingRides.entries()) {
@@ -213,20 +150,13 @@ export function registerRideSocket(io: Server) {
         if (nearbyForWaiting.length > 0) {
           clearTimeout(waitTimeout);
           waitingRides.delete(waitRideId);
-          logger.info({ rideId: waitRideId, driverId: data.driverId }, "Motorista conectou — despachando corrida da fila de espera");
           nearbyForWaiting.forEach((driver) => dispatchToDriver(io, waitRide, driver));
-          const passengerSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
-          if (passengerSocket) {
-            passengerSocket.emit("passenger:price_confirmed", {
-              rideId: waitRideId,
-              price: waitRide.price,
-              pin: waitRide.pin,
-            });
-          }
+          const passSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
+          if (passSocket) passSocket.emit("passenger:price_confirmed", { rideId: waitRideId, price: waitRide.price, pin: waitRide.pin });
           setTimeout(async () => {
             if (pendingRides.has(waitRideId)) {
-              const passSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
-              if (passSocket) passSocket.emit("passenger:no_drivers", { rideId: waitRideId });
+              const ps = io.sockets.sockets.get(waitRide.passengerSocketId);
+              if (ps) ps.emit("passenger:no_drivers", { rideId: waitRideId });
               pendingRides.delete(waitRideId);
               nearbyForWaiting.forEach((d) => io.to(d.socketId).emit("driver:ride_cancelled_for_others", { rideId: waitRideId }));
               await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, waitRideId)).catch(() => {});
@@ -238,97 +168,81 @@ export function registerRideSocket(io: Server) {
 
     socket.on("driver:offline", () => {
       for (const [id, d] of onlineDrivers.entries()) {
-        if (d.socketId === socket.id) {
-          onlineDrivers.delete(id);
-          logger.info({ driverId: id }, "Driver offline");
-          break;
-        }
+        if (d.socketId === socket.id) { onlineDrivers.delete(id); logger.info({ driverId: id }, "Driver offline"); break; }
       }
     });
 
-    // ─── PASSAGEIRO ────────────────────────────────────────────────────────────
-
     socket.on("passenger:request_ride", async (data: Omit<RideRequest, "passengerSocketId">) => {
       if (userId && String(userId) !== String(data.passengerId)) {
-        socket.emit("passenger:error", {
-          code: "FORBIDDEN",
-          message: "Identificação inválida. Por favor, reinicie o aplicativo.",
-        });
-        logger.warn({ userId, claimedId: data.passengerId }, "Tentativa de spoofing de passageiro bloqueada");
+        socket.emit("passenger:error", { code: "FORBIDDEN", message: "Identificação inválida." });
         return;
       }
 
+      let passengerRating = 5.0, passengerTotalRides = 0, passengerPhotoUrl: string | null = null;
       try {
         const passengerId = parseInt(data.passengerId);
         if (!isNaN(passengerId)) {
-          const [passenger] = await db
-            .select({ isApproved: usersTable.isApproved })
-            .from(usersTable)
-            .where(eq(usersTable.id, passengerId));
+          const [passenger] = await db.select({
+            isApproved: usersTable.isApproved,
+            suspended: usersTable.suspended,
+            cancellationFeeOwed: usersTable.cancellationFeeOwed,
+            passengerRating: usersTable.passengerRating,
+            totalRides: usersTable.totalRides,
+            profilePhotoUrl: usersTable.profilePhotoUrl,
+          }).from(usersTable).where(eq(usersTable.id, passengerId));
+
           if (!passenger?.isApproved) {
-            socket.emit("passenger:error", {
-              code: "NOT_APPROVED",
-              message: "Sua conta ainda não foi aprovada. Aguarde a verificação dos seus documentos.",
-            });
-            logger.warn({ passengerId }, "Corrida bloqueada: passageiro não aprovado");
+            socket.emit("passenger:error", { code: "NOT_APPROVED", message: "Sua conta ainda não foi aprovada." });
             return;
           }
+          if (passenger?.suspended) {
+            socket.emit("passenger:error", {
+              code: "SUSPENDED",
+              message: `Sua conta está suspensa por cancelamento tardio. Taxa pendente: R$ ${(passenger.cancellationFeeOwed ?? LATE_CANCEL_FEE).toFixed(2)}. Entre em contato com o suporte para regularizar.`,
+              fee: passenger.cancellationFeeOwed ?? LATE_CANCEL_FEE,
+            });
+            return;
+          }
+          passengerRating = passenger?.passengerRating ?? 5.0;
+          passengerTotalRides = passenger?.totalRides ?? 0;
+          passengerPhotoUrl = passenger?.profilePhotoUrl ?? null;
         }
-      } catch (err) {
-        logger.error({ err }, "Erro ao verificar aprovação do passageiro");
-      }
+      } catch (err) { logger.error({ err }, "Erro ao verificar passageiro"); }
 
       const origin = data.origin as RideOriginDest;
       const destination = data.destination as RideOriginDest;
-
       const distanceKm = data.distanceKm ?? getDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
       const { total: serverPrice } = calculatePrice(distanceKm, data.rideType);
-
       const ridePin = data.pin ?? Math.floor(1000 + Math.random() * 9000).toString();
 
       const ride: RideRequest = {
-        ...data,
-        price: serverPrice,
-        distanceKm,
-        passengerSocketId: socket.id,
-        pin: ridePin,
+        ...data, price: serverPrice, distanceKm, passengerSocketId: socket.id, pin: ridePin,
+        passengerRating, passengerTotalRides, passengerPhotoUrl,
       };
 
       pendingRides.set(data.rideId, ride);
-      logger.info({ rideId: data.rideId, passengerId: data.passengerId, price: serverPrice }, "Corrida solicitada");
+      logger.info({ rideId: data.rideId, price: serverPrice }, "Corrida solicitada");
 
       try {
         await db.insert(ridesTable).values({
           id: data.rideId,
           passengerId: parseInt(data.passengerId) || null,
-          originAddress: origin.address,
-          originLat: origin.lat,
-          originLng: origin.lng,
-          destAddress: destination.address,
-          destLat: destination.lat,
-          destLng: destination.lng,
+          originAddress: origin.address, originLat: origin.lat, originLng: origin.lng,
+          destAddress: destination.address, destLat: destination.lat, destLng: destination.lng,
           rideType: data.rideType as "moto" | "basico" | "intermediario" | "vip",
-          price: serverPrice,
-          distance: data.distance,
-          duration: data.duration,
-          status: "finding",
-          pin: ridePin,
+          price: serverPrice, distance: data.distance, duration: data.duration,
+          status: "finding", pin: ridePin,
         }).onConflictDoNothing();
-      } catch (err) {
-        logger.error({ err }, "Erro ao persistir corrida");
-      }
+      } catch (err) { logger.error({ err }, "Erro ao persistir corrida"); }
 
       const nearbyDrivers = getNearbyDrivers(origin.lat, origin.lng, data.rideType);
-
       if (nearbyDrivers.length === 0) {
         socket.emit("passenger:waiting_for_driver", { rideId: data.rideId, waitSeconds: 60 });
-        logger.info({ rideId: data.rideId }, "Sem motoristas disponíveis — aguardando até 60s na fila");
         const waitTimeoutId = setTimeout(async () => {
           if (waitingRides.has(data.rideId)) {
             waitingRides.delete(data.rideId);
             pendingRides.delete(data.rideId);
             socket.emit("passenger:no_drivers", { rideId: data.rideId });
-            logger.info({ rideId: data.rideId }, "Timeout de 60s expirado — sem motoristas encontrados");
             await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, data.rideId)).catch(() => {});
           }
         }, 60000);
@@ -352,221 +266,180 @@ export function registerRideSocket(io: Server) {
     socket.on("driver:accept", async ({ rideId }: { rideId: string }) => {
       const ride = pendingRides.get(rideId);
       if (!ride) return;
-
       let acceptingDriver: DriverInfo | null = null;
-      for (const d of onlineDrivers.values()) {
-        if (d.socketId === socket.id) { acceptingDriver = d; break; }
-      }
+      for (const d of onlineDrivers.values()) { if (d.socketId === socket.id) { acceptingDriver = d; break; } }
       if (!acceptingDriver) return;
-
       pendingRides.delete(rideId);
       rideRejections.delete(rideId);
-      activeRides.set(rideId, {
-        passengerId: ride.passengerId,
-        driverId: acceptingDriver.driverId,
-        passengerSocketId: ride.passengerSocketId,
-        driverSocketId: socket.id,
-      });
-
+      activeRides.set(rideId, { passengerId: ride.passengerId, driverId: acceptingDriver.driverId, passengerSocketId: ride.passengerSocketId, driverSocketId: socket.id });
       try {
-        await db.update(ridesTable).set({
-          driverId: parseInt(acceptingDriver.driverId) || null,
-          status: "accepted",
-        }).where(eq(ridesTable.id, rideId));
-      } catch (err) {
-        logger.error({ err }, "Erro ao atualizar corrida aceita");
-      }
-
+        await db.update(ridesTable).set({ driverId: parseInt(acceptingDriver.driverId) || null, status: "accepted" }).where(eq(ridesTable.id, rideId));
+      } catch (err) { logger.error({ err }, "Erro ao atualizar corrida aceita"); }
       logger.info({ rideId, driverId: acceptingDriver.driverId }, "Corrida aceita");
-
       io.to(ride.passengerSocketId).emit("passenger:driver_found", {
-        rideId,
-        driver: {
-          id: acceptingDriver.driverId,
-          name: acceptingDriver.name,
-          rating: acceptingDriver.rating,
-          car: acceptingDriver.car,
-          color: acceptingDriver.color,
-          plate: acceptingDriver.plate,
-          eta: acceptingDriver.eta,
-          photo: acceptingDriver.photo,
-        },
+        rideId, driver: { id: acceptingDriver.driverId, name: acceptingDriver.name, rating: acceptingDriver.rating, car: acceptingDriver.car, color: acceptingDriver.color, plate: acceptingDriver.plate, eta: acceptingDriver.eta, photo: acceptingDriver.photo },
       });
-
       for (const d of onlineDrivers.values()) {
-        if (d.driverId !== acceptingDriver.driverId) {
-          io.to(d.socketId).emit("driver:ride_accepted_by_other", { rideId });
-        }
+        if (d.driverId !== acceptingDriver.driverId) io.to(d.socketId).emit("driver:ride_accepted_by_other", { rideId });
       }
     });
 
     socket.on("driver:reject", ({ rideId }: { rideId: string }) => {
       const ride = pendingRides.get(rideId);
       if (!ride) return;
-
-      // Track which driver rejected this ride
       let rejectedSet = rideRejections.get(rideId);
       if (!rejectedSet) { rejectedSet = new Set(); rideRejections.set(rideId, rejectedSet); }
-
       let rejectingDriverId: string | undefined;
-      for (const [id, d] of onlineDrivers.entries()) {
-        if (d.socketId === socket.id) { rejectingDriverId = id; break; }
-      }
+      for (const [id, d] of onlineDrivers.entries()) { if (d.socketId === socket.id) { rejectingDriverId = id; break; } }
       if (rejectingDriverId) rejectedSet.add(rejectingDriverId);
-
-      logger.info({ rideId, driverId: rejectingDriverId }, "Motorista recusou corrida");
-
-      // Find drivers who are online, nearby, and have NOT rejected yet
-      const remaining = getNearbyDrivers(ride.origin.lat, ride.origin.lng, ride.rideType)
-        .filter(d => !rejectedSet!.has(d.driverId));
-
+      const remaining = getNearbyDrivers(ride.origin.lat, ride.origin.lng, ride.rideType).filter(d => !rejectedSet!.has(d.driverId));
       if (remaining.length === 0) {
-        // All available drivers rejected — notify passenger immediately
-        const passengerSocket = io.sockets.sockets.get(ride.passengerSocketId);
-        if (passengerSocket) passengerSocket.emit("passenger:no_drivers", { rideId });
-        pendingRides.delete(rideId);
-        rideRejections.delete(rideId);
-        logger.info({ rideId }, "Todos os motoristas recusaram — passageiro notificado");
+        const ps = io.sockets.sockets.get(ride.passengerSocketId);
+        if (ps) ps.emit("passenger:no_drivers", { rideId });
+        pendingRides.delete(rideId); rideRejections.delete(rideId);
       } else {
-        // Dispatch to any new drivers that weren't in the original batch
-        const alreadyNotified = new Set(
-          Array.from(rideRejections.get(rideId) ?? [])
-        );
-        const newDrivers = remaining.filter(d => {
-          // Dispatch to drivers who haven't seen this ride yet (not in the rejection set and not the acceptor)
-          return !alreadyNotified.has(d.driverId);
-        });
-        if (newDrivers.length > 0) {
-          newDrivers.forEach(d => dispatchToDriver(io, ride, d));
-          logger.info({ rideId, count: newDrivers.length }, "Corrida redespachada para novos motoristas após rejeição");
-        }
+        const alreadyNotified = new Set(Array.from(rideRejections.get(rideId) ?? []));
+        const newDrivers = remaining.filter(d => !alreadyNotified.has(d.driverId));
+        if (newDrivers.length > 0) newDrivers.forEach(d => dispatchToDriver(io, ride, d));
       }
     });
 
-    socket.on("driver:arrived", ({ rideId }: { rideId: string }) => {
+    socket.on("driver:arrived", async ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
+      const now = new Date();
+      rideArrivedAt.set(rideId, now);
       logger.info({ rideId }, "Motorista chegou ao local");
       io.to(active.passengerSocketId).emit("passenger:driver_arrived", { rideId });
+      await db.update(ridesTable).set({ arrivedAt: now }).where(eq(ridesTable.id, rideId)).catch(() => {});
+      const warningTimer = setTimeout(() => {
+        io.to(active.passengerSocketId).emit("passenger:wait_fee_warning", {
+          rideId, feePerMin: WAIT_FEE_PER_MIN,
+          message: `Tempo de espera gratuito esgotado. Será cobrado R$ ${WAIT_FEE_PER_MIN.toFixed(2)}/min a partir de agora.`,
+        });
+        io.to(active.driverSocketId).emit("driver:wait_fee_started", { rideId, feePerMin: WAIT_FEE_PER_MIN });
+        logger.info({ rideId }, "Taxa de tempo de espera iniciada");
+      }, WAIT_FREE_MINUTES * 60 * 1000);
+      waitTimers.set(rideId, warningTimer);
     });
 
     socket.on("driver:start_trip", async ({ rideId, pin }: { rideId: string; pin?: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
-
+      if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
+      let waitTimeFee = 0;
+      const arrivedTime = rideArrivedAt.get(rideId);
+      if (arrivedTime) {
+        const waitMin = (Date.now() - arrivedTime.getTime()) / 60000;
+        const chargeableMin = Math.max(0, waitMin - WAIT_FREE_MINUTES);
+        waitTimeFee = Math.round(chargeableMin * WAIT_FEE_PER_MIN * 100) / 100;
+        rideArrivedAt.delete(rideId);
+      }
       if (pin) {
         try {
           const [ride] = await db.select({ pin: ridesTable.pin }).from(ridesTable).where(eq(ridesTable.id, rideId));
           if (ride?.pin && pin !== ride.pin) {
-            socket.emit("driver:pin_invalid", {
-              rideId,
-              message: "PIN incorreto. Peça o código de 4 dígitos ao passageiro.",
-            });
-            logger.warn({ rideId }, "PIN inválido fornecido pelo motorista");
+            socket.emit("driver:pin_invalid", { rideId, message: "PIN incorreto. Peça o código de 4 dígitos ao passageiro." });
             return;
           }
-        } catch (err) {
-          logger.error({ err }, "Erro ao verificar PIN");
-        }
+        } catch (err) { logger.error({ err }, "Erro ao verificar PIN"); }
       }
-
-      logger.info({ rideId }, "Viagem iniciada");
-      io.to(active.passengerSocketId).emit("passenger:trip_started", { rideId });
-      await db.update(ridesTable).set({ status: "in_progress" }).where(eq(ridesTable.id, rideId)).catch(() => {});
+      if (waitTimeFee > 0) {
+        io.to(active.passengerSocketId).emit("passenger:wait_fee_charged", {
+          rideId, waitTimeFee,
+          message: `Taxa de espera adicionada: R$ ${waitTimeFee.toFixed(2)}`,
+        });
+        io.to(active.driverSocketId).emit("driver:wait_fee_info", { rideId, waitTimeFee });
+      }
+      await db.update(ridesTable).set({ status: "in_progress", waitTimeFee }).where(eq(ridesTable.id, rideId)).catch(() => {});
+      logger.info({ rideId, waitTimeFee }, "Viagem iniciada");
+      io.to(active.passengerSocketId).emit("passenger:trip_started", { rideId, waitTimeFee });
     });
 
     socket.on("driver:complete_trip", async ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
+      if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
+      rideArrivedAt.delete(rideId);
       logger.info({ rideId }, "Viagem concluída");
       io.to(active.passengerSocketId).emit("passenger:trip_completed", { rideId });
       activeRides.delete(rideId);
-
       try {
-        await db.update(ridesTable).set({
-          status: "completed",
-          completedAt: new Date(),
-        }).where(eq(ridesTable.id, rideId));
-
+        await db.update(ridesTable).set({ status: "completed", completedAt: new Date() }).where(eq(ridesTable.id, rideId));
         const driverUserId = parseInt(active.driverId);
         if (!isNaN(driverUserId)) {
-          await db.update(usersTable)
-            .set({ totalRides: sql`${usersTable.totalRides} + 1` })
-            .where(eq(usersTable.id, driverUserId));
-          logger.info({ driverId: driverUserId, rideId }, "totalRides incrementado para motorista");
+          await db.update(usersTable).set({ totalRides: sql`${usersTable.totalRides} + 1` }).where(eq(usersTable.id, driverUserId));
         }
-      } catch (err) {
-        logger.error({ err }, "Erro ao finalizar corrida no banco");
-      }
+      } catch (err) { logger.error({ err }, "Erro ao finalizar corrida"); }
     });
 
     socket.on("driver:cancel", async ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
+      if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
+      rideArrivedAt.delete(rideId);
       io.to(active.passengerSocketId).emit("passenger:ride_cancelled_by_driver", { rideId });
       activeRides.delete(rideId);
-      logger.info({ rideId }, "Corrida cancelada pelo motorista");
       await db.update(ridesTable).set({ status: "cancelled", driverId: null }).where(eq(ridesTable.id, rideId)).catch(() => {});
     });
 
     socket.on("passenger:cancel", async ({ rideId }: { rideId: string }) => {
-      if (waitingRides.has(rideId)) {
-        const { timeoutId } = waitingRides.get(rideId)!;
-        clearTimeout(timeoutId);
-        waitingRides.delete(rideId);
-        logger.info({ rideId }, "Corrida cancelada (na fila de espera)");
-      }
-      if (pendingRides.has(rideId)) {
-        pendingRides.delete(rideId);
-        rideRejections.delete(rideId);
-        logger.info({ rideId }, "Corrida cancelada (pendente)");
-      }
+      if (waitingRides.has(rideId)) { const { timeoutId } = waitingRides.get(rideId)!; clearTimeout(timeoutId); waitingRides.delete(rideId); }
+      if (pendingRides.has(rideId)) { pendingRides.delete(rideId); rideRejections.delete(rideId); }
       const active = activeRides.get(rideId);
+      const isLate = active && rideArrivedAt.has(rideId);
+      if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
+      rideArrivedAt.delete(rideId);
       if (active) {
         io.to(active.driverSocketId).emit("driver:ride_cancelled", { rideId });
         activeRides.delete(rideId);
-        logger.info({ rideId }, "Corrida cancelada (ativa)");
+        if (isLate) {
+          logger.warn({ rideId, passengerId: active.passengerId }, "Cancelamento tardio — cobrando taxa");
+          const passengerId = parseInt(active.passengerId);
+          if (!isNaN(passengerId)) {
+            await db.update(usersTable).set({
+              suspended: true,
+              cancellationFeeOwed: sql`${usersTable.cancellationFeeOwed} + ${LATE_CANCEL_FEE}`,
+            }).where(eq(usersTable.id, passengerId)).catch(() => {});
+            io.to(active.passengerSocketId).emit("passenger:account_suspended", {
+              reason: "late_cancellation", fee: LATE_CANCEL_FEE,
+              message: `Sua conta foi suspensa por cancelamento tardio. Taxa de R$ ${LATE_CANCEL_FEE.toFixed(2)} aplicada. Entre em contato com o suporte para regularizar.`,
+            });
+          }
+          await db.update(ridesTable).set({ status: "cancelled", cancelledLate: true, cancelledAt: new Date() }).where(eq(ridesTable.id, rideId)).catch(() => {});
+        } else {
+          await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, rideId)).catch(() => {});
+        }
+      } else {
+        await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, rideId)).catch(() => {});
       }
-      await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, rideId)).catch(() => {});
     });
 
     socket.on("driver:update_location", ({ driverId, latitude, longitude }: { driverId: string; latitude: number; longitude: number }) => {
       const driver = onlineDrivers.get(driverId);
       if (driver) {
-        driver.latitude = latitude;
-        driver.longitude = longitude;
+        driver.latitude = latitude; driver.longitude = longitude;
         onlineDrivers.set(driverId, driver);
         for (const [rideId, activeRide] of activeRides.entries()) {
-          if (activeRide.driverId === driverId) {
-            io.to(activeRide.passengerSocketId).emit("driver:location_update", { rideId, latitude, longitude });
-          }
+          if (activeRide.driverId === driverId) io.to(activeRide.passengerSocketId).emit("driver:location_update", { rideId, latitude, longitude });
         }
       }
     });
 
-    socket.on("chat:send", async ({ rideId, senderId, senderName, text, msgId }: { rideId: string; senderId: string; senderName: string; text: string; msgId: string }) => {
+    socket.on("chat:send", ({ rideId, senderId, senderName, text, msgId }: { rideId: string; senderId: string; senderName: string; text: string; msgId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
-
-      const isParticipant =
-        socket.id === active.passengerSocketId ||
-        socket.id === active.driverSocketId;
-      if (!isParticipant) {
-        logger.warn({ rideId, senderId, socketId: socket.id }, "Tentativa de chat por não-participante bloqueada");
-        return;
-      }
-
+      const isParticipant = socket.id === active.passengerSocketId || socket.id === active.driverSocketId;
+      if (!isParticipant) { logger.warn({ rideId, senderId }, "Chat bloqueado: não-participante"); return; }
       const msg: ChatMessage = { msgId, senderId, senderName, text, timestamp: Date.now() };
-
       const isPassenger = socket.id === active.passengerSocketId;
-      const targetSocketId = isPassenger ? active.driverSocketId : active.passengerSocketId;
-      io.to(targetSocketId).emit("chat:message", msg);
+      io.to(isPassenger ? active.driverSocketId : active.passengerSocketId).emit("chat:message", msg);
     });
 
     socket.on("ride:emergency", ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
-      logger.warn({ rideId }, "EMERGÊNCIA SOS ativado pelo passageiro");
+      logger.warn({ rideId }, "SOS ativado pelo passageiro");
       io.to(active.driverSocketId).emit("ride:emergency_alert", { rideId });
       io.to(active.passengerSocketId).emit("ride:emergency_confirmed", { rideId });
     });
@@ -574,18 +447,14 @@ export function registerRideSocket(io: Server) {
     socket.on("driver:sos", ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
-      logger.warn({ rideId }, "EMERGÊNCIA SOS ativado pelo motorista");
+      logger.warn({ rideId }, "SOS ativado pelo motorista");
       io.to(active.passengerSocketId).emit("ride:emergency_alert", { rideId });
       io.to(active.driverSocketId).emit("ride:emergency_confirmed", { rideId });
     });
 
     socket.on("disconnect", () => {
       for (const [id, d] of onlineDrivers.entries()) {
-        if (d.socketId === socket.id) {
-          onlineDrivers.delete(id);
-          logger.info({ driverId: id }, "Motorista desconectado");
-          break;
-        }
+        if (d.socketId === socket.id) { onlineDrivers.delete(id); logger.info({ driverId: id }, "Motorista desconectado"); break; }
       }
     });
   });
@@ -595,11 +464,11 @@ function dispatchToDriver(io: Server, ride: RideRequest, driver: DriverInfo) {
   io.to(driver.socketId).emit("driver:ride_request", {
     rideId: ride.rideId,
     passenger: ride.passengerName ?? "Passageiro",
-    origin: ride.origin,
-    destination: ride.destination,
-    distance: ride.distance,
-    price: ride.price,
-    rideType: ride.rideType,
-    eta: driver.eta,
+    passengerRating: ride.passengerRating ?? 5.0,
+    passengerTotalRides: ride.passengerTotalRides ?? 0,
+    passengerPhotoUrl: ride.passengerPhotoUrl ?? null,
+    origin: ride.origin, destination: ride.destination,
+    distance: ride.distance, price: ride.price,
+    rideType: ride.rideType, eta: driver.eta,
   });
 }
