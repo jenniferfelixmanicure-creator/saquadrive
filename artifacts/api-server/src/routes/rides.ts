@@ -68,7 +68,7 @@ router.get("/rides/history", authenticate, async (req: AuthRequest, res) => {
 router.get("/rides/driver/history", authenticate, async (req: AuthRequest, res) => {
   try {
     const rides = await db.select().from(ridesTable)
-      .where(eq(ridesTable.driverId, req.user!.userId))
+      .where(sql`${ridesTable.driverId} = ${req.user!.userId} AND ${ridesTable.status} = 'completed'`)
       .orderBy(desc(ridesTable.createdAt))
       .limit(50);
     res.json(rides);
@@ -81,40 +81,43 @@ router.get("/rides/driver/history", authenticate, async (req: AuthRequest, res) 
 router.get("/rides/driver/stats", authenticate, async (req: AuthRequest, res) => {
   try {
     const driverId = req.user!.userId;
+
     const [totals] = await db.select({
       totalRides: sql<number>`count(*)::int`,
       totalEarnings: sql<number>`coalesce(sum(${ridesTable.price}), 0)`,
-    }).from(ridesTable).where(eq(ridesTable.driverId, driverId));
+    }).from(ridesTable).where(
+      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.status} = 'completed'`
+    );
 
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const [weekly] = await db.select({
       weekRides: sql<number>`count(*)::int`,
       weekEarnings: sql<number>`coalesce(sum(${ridesTable.price}), 0)`,
     }).from(ridesTable).where(
-      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.createdAt} >= ${startOfWeek}`
+      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.status} = 'completed' AND ${ridesTable.createdAt} >= ${startOfWeek}`
     );
 
     const [monthly] = await db.select({
       monthRides: sql<number>`count(*)::int`,
       monthEarnings: sql<number>`coalesce(sum(${ridesTable.price}), 0)`,
     }).from(ridesTable).where(
-      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.createdAt} >= ${startOfMonth}`
+      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.status} = 'completed' AND ${ridesTable.createdAt} >= ${startOfMonth}`
     );
 
-    const [driver] = await db.select({ driverRating: usersTable.driverRating })
-      .from(usersTable).where(eq(usersTable.id, driverId)).limit(1);
-
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const [today] = await db.select({
       todayRides: sql<number>`count(*)::int`,
     }).from(ridesTable).where(
-      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.createdAt} >= ${startOfDay}`
+      sql`${ridesTable.driverId} = ${driverId} AND ${ridesTable.status} = 'completed' AND ${ridesTable.createdAt} >= ${startOfDay}`
     );
+
+    const [driver] = await db.select({ driverRating: usersTable.driverRating, totalRides: usersTable.totalRides })
+      .from(usersTable).where(eq(usersTable.id, driverId)).limit(1);
 
     res.json({
       totalRides: totals?.totalRides ?? 0,
