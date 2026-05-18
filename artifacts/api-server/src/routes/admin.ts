@@ -3,6 +3,7 @@ import { eq, sql, desc } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { usersTable, ridesTable, promoCodesTable } from "@workspace/db";
 import { authenticateAdmin, type AuthRequest } from "../middlewares/authenticate.js";
+import { sendSuspensionNotification, sendPushNotification } from "../lib/expoPush.js";
 
 const router = Router();
 router.use(authenticateAdmin);
@@ -123,6 +124,37 @@ router.get("/admin/users", async (req: AuthRequest, res) => {
   } catch (err) { req.log.error(err); res.status(500).json({ message: "Erro interno" }); }
 });
 
+// ── Suspender passageiro ───────────────────────────────────────────────────────
+
+router.post("/admin/users/:id/suspend", async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { cancellationFee } = req.body as { cancellationFee?: number };
+    const fee = Number(cancellationFee ?? 0);
+
+    const [updated] = await db.update(usersTable)
+      .set({ suspended: true, cancellationFeeOwed: fee })
+      .where(eq(usersTable.id, id))
+      .returning({
+        id: usersTable.id,
+        suspended: usersTable.suspended,
+        cancellationFeeOwed: usersTable.cancellationFeeOwed,
+        expoPushToken: usersTable.expoPushToken,
+      });
+
+    if (!updated) { res.status(404).json({ message: "Usuário não encontrado" }); return; }
+
+    req.log.info({ id, fee }, "Passageiro suspenso pelo admin");
+
+    // Dispara push notification em background (não bloqueia a resposta)
+    sendSuspensionNotification(updated.expoPushToken, fee).catch((err) =>
+      req.log.error({ err }, "Erro ao enviar push de suspensão")
+    );
+
+    res.json({ ...updated, id: String(updated.id) });
+  } catch (err) { req.log.error(err); res.status(500).json({ message: "Erro interno" }); }
+});
+
 // ── Taxas de cancelamento tardio ──────────────────────────────────────────────
 
 router.get("/admin/cancellation-fees", async (req: AuthRequest, res) => {
@@ -144,8 +176,23 @@ router.post("/admin/users/:id/release-suspension", async (req: AuthRequest, res)
     const [updated] = await db.update(usersTable)
       .set({ suspended: false, cancellationFeeOwed: 0 })
       .where(eq(usersTable.id, id))
-      .returning({ id: usersTable.id, suspended: usersTable.suspended, cancellationFeeOwed: usersTable.cancellationFeeOwed });
+      .returning({
+        id: usersTable.id,
+        suspended: usersTable.suspended,
+        cancellationFeeOwed: usersTable.cancellationFeeOwed,
+        expoPushToken: usersTable.expoPushToken,
+      });
+
     req.log.info({ id }, "Suspensão liberada pelo admin");
+
+    // Notifica que a suspensão foi removida
+    sendPushNotification(
+      updated?.expoPushToken,
+      "Conta Reativada",
+      "Sua conta foi reativada com sucesso. Você já pode solicitar corridas normalmente.",
+      { type: "suspension_released" }
+    ).catch((err) => req.log.error({ err }, "Erro ao enviar push de reativação"));
+
     res.json({ ...updated, id: String(updated.id) });
   } catch (err) { req.log.error(err); res.status(500).json({ message: "Erro interno" }); }
 });
