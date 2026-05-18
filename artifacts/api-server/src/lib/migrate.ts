@@ -63,6 +63,7 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_plate" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_model" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_year" integer;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_type" text;
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "vehicle_color" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "profile_photo_url" text;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "driver_rating" real NOT NULL DEFAULT 5.0;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "passenger_rating" real NOT NULL DEFAULT 5.0;
@@ -81,3 +82,4 @@ export async function runMigrations(logger: Logger): Promise<void> {
     client.release();
   }
 }
+
