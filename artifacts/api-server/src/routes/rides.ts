@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { eq, desc, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
-import { ridesTable, usersTable, promoCodesTable } from "@workspace/db";
+import { ridesTable, usersTable, promoCodesTable, ratingsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate.js";
 
 const router = Router();
@@ -76,10 +76,14 @@ router.get("/rides/driver/history", authenticate, async (req: AuthRequest, res) 
       status: ridesTable.status,
       distance: ridesTable.distance,
       duration: ridesTable.duration,
-      driverRating: ridesTable.driverRating,
       createdAt: ridesTable.createdAt,
+      passengerStars: ratingsTable.stars,
     }).from(ridesTable)
-      .where(sql`${ridesTable.driverId} = ${req.user!.userId} AND ${ridesTable.status} = 'completed'`)
+      .leftJoin(
+        ratingsTable,
+        sql`${ratingsTable.rideId} = ${ridesTable.id} AND ${ratingsTable.ratedId} = ${ridesTable.driverId} AND ${ratingsTable.role} = 'passenger'`
+      )
+      .where(eq(ridesTable.driverId, req.user!.userId))
       .orderBy(desc(ridesTable.createdAt)).limit(50);
     res.json(rides.map(r => ({
       id: r.id,
@@ -90,7 +94,7 @@ router.get("/rides/driver/history", authenticate, async (req: AuthRequest, res) 
       status: r.status,
       distance: r.distance,
       duration: r.duration,
-      driverRating: r.driverRating,
+      driverRating: r.passengerStars ?? null,
       createdAt: r.createdAt,
     })));
   } catch (err) { req.log.error(err); res.status(500).json({ message: "Erro interno" }); }
