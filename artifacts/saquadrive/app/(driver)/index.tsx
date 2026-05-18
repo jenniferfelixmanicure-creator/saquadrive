@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
 import {
-  Alert, Animated, Easing, FlatList, Modal, Platform, ScrollView,
+  Alert, Animated, Easing, FlatList, Linking, Modal, Platform, ScrollView,
   StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +30,7 @@ type RideRequest = {
   origin: RideLocation | string;
   destination: RideLocation | string;
   distance: string;
+  distanceToPassenger?: string;
   price: number;
   rideType: string;
   eta: number;
@@ -182,7 +183,7 @@ export default function DriverHomeScreen() {
       if (!isOnline || activeRide) return;
       const safeData: RideRequest = { ...data, passenger: data.passenger ?? "Passageiro" };
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      sendLocalNotification("🚕 Nova Corrida!", `Passageiro: ${safeData.passenger} — ${safeData.distance} de você.`, safeData);
+      sendLocalNotification("🚕 Nova Corrida!", `${safeData.passenger} — ${safeData.distanceToPassenger ?? safeData.distance}`, safeData);
       setRequests((prev) => { const exists = prev.find((r) => r.rideId === safeData.rideId); return exists ? prev : [...prev, safeData]; });
     });
     socket.on("driver:ride_cancelled", ({ rideId }: { rideId: string }) => {
@@ -231,7 +232,17 @@ export default function DriverHomeScreen() {
     buildRoute();
   }, [activeRide?.rideId, ridePhase, driverLocation?.latitude, driverLocation?.longitude]);
 
-  function handleToggle() {
+  function openNavigation(lat: number, lng: number, label: string) {
+    const wazeUrl = `waze://?ll=${lat},${lng}&navigate=yes`;
+    const googleMapsUrl = `geo:${lat},${lng}?q=${encodeURIComponent(label)}`;
+    const appleMapsUrl = `maps://maps.apple.com/?daddr=${lat},${lng}`;
+    Linking.canOpenURL(wazeUrl).then((supported) => {
+      if (supported) { Linking.openURL(wazeUrl); return; }
+      if (Platform.OS === "ios") { Linking.openURL(appleMapsUrl); } else { Linking.openURL(googleMapsUrl); }
+    }).catch(() => { Linking.openURL(googleMapsUrl); });
+  }
+
+    function handleToggle() {
     if (!isOnline && !user?.isApproved) { setShowNotApprovedModal(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const next = !isOnline; setIsOnline(next);
@@ -360,7 +371,7 @@ export default function DriverHomeScreen() {
                         {(item.passengerRating ?? 5.0).toFixed(1)} · {item.passengerTotalRides ?? 0} corridas
                       </Text>
                     </View>
-                    <Text style={[styles.requestMeta, { color: colors.mutedForeground }]}>{item.distance} · {item.eta} min para buscar</Text>
+                    <Text style={[styles.requestMeta, { color: colors.mutedForeground }]}>{item.distanceToPassenger ?? item.distance} · {item.eta} min para buscar</Text>
                   </View>
                   <Text style={[styles.price, { color: colors.primary }]}>R$ {(item.price ?? 0).toFixed(2)}</Text>
                 </View>
@@ -441,6 +452,20 @@ export default function DriverHomeScreen() {
             )}
 
             {ridePhase === "in_progress" && (
+              <>
+              {(() => {
+                const destLoc = activeRide ? parseLocation(activeRide.destination) : undefined;
+                return destLoc ? (
+                  <TouchableOpacity
+                    style={[styles.navBtn, { backgroundColor: colors.success + "22", borderColor: colors.success + "55", marginBottom: 10 }]}
+                    onPress={() => openNavigation(destLoc.lat, destLoc.lng, getAddressText(activeRide!.destination))}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="navigation" size={16} color={colors.success} />
+                    <Text style={[styles.navBtnText, { color: colors.success }]}>Navegar até o destino</Text>
+                  </TouchableOpacity>
+                ) : null;
+              })()}
               <TouchableOpacity style={[styles.finishBtn, { backgroundColor: colors.success }]} onPress={handleFinishRide} activeOpacity={0.85}>
                 <Feather name="check-circle" size={18} color="#fff" />
                 <Text style={styles.finishText}>Finalizar corrida</Text>
