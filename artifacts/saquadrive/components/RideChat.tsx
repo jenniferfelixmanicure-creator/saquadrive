@@ -152,7 +152,7 @@ export default function RideChat({ visible, onClose, rideId, myId, myName, other
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={[styles.headerAvatar, { backgroundColor: colors.secondary }]}>
-              <Text style={styles.headerAvatarText}>{otherName[0]?.toUpperCase()}</Text>
+              <Text style={styles.headerAvatarText}>{(otherName ?? "")[0]?.toUpperCase() ?? "?"}</Text>
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.headerName, { color: colors.foreground }]}>{otherName}</Text>
@@ -174,7 +174,7 @@ export default function RideChat({ visible, onClose, rideId, myId, myName, other
               <View style={styles.emptyBox}>
                 <Feather name="message-circle" size={32} color={colors.border} />
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  Diga olá para {otherName.split(" ")[0]}!
+                  Diga olá para {(otherName ?? "você").split(" ")[0]}!
                 </Text>
               </View>
             }
