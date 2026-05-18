@@ -483,6 +483,7 @@ export default function DriverHomeScreen() {
                 <Feather name="check-circle" size={18} color="#fff" />
                 <Text style={styles.finishText}>Finalizar corrida</Text>
               </TouchableOpacity>
+              </>
             )}
           </View>
         )}
