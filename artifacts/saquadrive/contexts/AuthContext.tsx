@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { API_URL } from "@/constants/api";
+import { registerForPushNotificationsAsync } from "@/lib/notifications";
 
 export type AppMode = "passenger" | "driver";
 
@@ -91,6 +92,18 @@ type AuthResponse = {
   refreshToken?: string;
   user: { id: string; name: string; email: string; phone: string; isApproved: boolean; rgStatus: string; profilePhotoUrl?: string };
 };
+
+async function registerPushToken(authToken: string): Promise<void> {
+  try {
+    const pushToken = await registerForPushNotificationsAsync();
+    if (!pushToken) return;
+    await fetch(`${API_URL}/api/users/me/expo-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ expoPushToken: pushToken }),
+    });
+  } catch {}
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -184,6 +197,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {}
     setUser(userData); setToken(data.token);
+    // Registra token de push em background (não bloqueia o login)
+    registerPushToken(data.token);
   }
 
   async function register(name: string, email: string, phone: string, password: string, role = "passenger") {
@@ -199,6 +214,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileRes.ok) { const profile = await profileRes.json() as Partial<User>; Object.assign(userData, { driverRating: profile.driverRating, totalRides: profile.totalRides, cnhStatus: profile.cnhStatus, crlvStatus: profile.crlvStatus, rgStatus: profile.rgStatus ?? userData.rgStatus, vehiclePlate: profile.vehiclePlate, vehicleModel: profile.vehicleModel }); await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)); }
     } catch {}
     setUser(userData); setToken(data.token);
+    // Registra token de push em background
+    registerPushToken(data.token);
   }
 
   async function logout() {
