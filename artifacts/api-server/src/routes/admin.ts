@@ -163,4 +163,37 @@ router.post("/admin/drivers/:id/reject", async (req: AuthRequest, res) => {
   }
 });
 
+
+router.get("/admin/users", async (req: AuthRequest, res) => {
+  try {
+    const users = await db.select({
+      id: usersTable.id,
+      name: usersTable.name,
+      email: usersTable.email,
+      phone: usersTable.phone,
+      role: usersTable.role,
+      isApproved: usersTable.isApproved,
+      profilePhotoUrl: usersTable.profilePhotoUrl,
+      totalRides: usersTable.totalRides,
+      driverRating: usersTable.driverRating,
+      passengerRating: usersTable.passengerRating,
+      rgStatus: usersTable.rgStatus,
+      cnhStatus: usersTable.cnhStatus,
+      crlvStatus: usersTable.crlvStatus,
+      vehiclePlate: usersTable.vehiclePlate,
+      vehicleModel: usersTable.vehicleModel,
+      vehicleType: usersTable.vehicleType,
+      vehicleColor: usersTable.vehicleColor,
+      vehicleYear: usersTable.vehicleYear,
+      subscriptionActive: usersTable.subscriptionActive,
+      subscriptionExpiresAt: usersTable.subscriptionExpiresAt,
+      createdAt: usersTable.createdAt,
+    }).from(usersTable).orderBy(usersTable.createdAt);
+    res.json(users.map(u => ({ ...u, id: String(u.id) })));
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
 export default router;
