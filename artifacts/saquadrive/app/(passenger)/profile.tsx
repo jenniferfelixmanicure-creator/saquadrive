@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import React from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -102,9 +103,16 @@ export default function PassengerProfileScreen() {
         colors={["#0D1A2E", "#0D0D0D"]}
         style={[styles.headerGrad, { paddingTop: topPad + 16 }]}
       >
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <Text style={styles.avatarText}>{initials}</Text>
-        </View>
+        {user?.profilePhotoUrl ? (
+          <Image
+            source={{ uri: user.profilePhotoUrl }}
+            style={styles.avatar}
+          />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </View>
+        )}
         <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
         <Text style={[styles.email, { color: colors.mutedForeground }]}>{user?.email}</Text>
         <View style={styles.statsRow}>
