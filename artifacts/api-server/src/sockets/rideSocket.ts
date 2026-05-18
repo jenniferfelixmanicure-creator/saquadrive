@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { db } from "@workspace/db";
-import { chatMessagesTable, ridesTable, driversTable, usersTable } from "@workspace/db/schema";
+import { ridesTable, usersTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import jwt from "jsonwebtoken";
@@ -10,7 +10,6 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET deve ser definido nas variáveis de ambiente");
 }
 
-// Preços por km por tipo de corrida (fonte única de verdade — no servidor)
 const RIDE_PRICES: Record<string, number> = {
   moto: 1.20,
   basico: 1.70,
@@ -113,7 +112,6 @@ function getNearbyDrivers(lat: number, lng: number, rideType: string, radius = 1
   return available.sort((a, b) => a.distanceToPassenger - b.distanceToPassenger);
 }
 
-// Restaura corridas em andamento do banco de dados após reinicialização do servidor
 async function loadActiveRides() {
   try {
     const rides = await db
@@ -141,12 +139,9 @@ async function loadActiveRides() {
 export function registerRideSocket(io: Server) {
   loadActiveRides();
 
-  // Autenticação do socket via JWT
   io.use((socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
-    if (!token) {
-      return next();
-    }
+    if (!token) return next();
     try {
       const payload = jwt.verify(token, JWT_SECRET) as { userId: number };
       (socket as unknown as { userId: number }).userId = payload.userId;
@@ -160,7 +155,6 @@ export function registerRideSocket(io: Server) {
     const userId = (socket as unknown as { userId?: number }).userId;
     logger.info({ socketId: socket.id, userId }, "Socket connected");
 
-    // Restaurar sessão de corrida ativa (ex: após reconexão ou reinicialização do servidor)
     if (userId) {
       for (const [rideId, activeRide] of activeRides.entries()) {
         if (activeRide.passengerId === String(userId)) {
@@ -178,14 +172,13 @@ export function registerRideSocket(io: Server) {
     // ─── MOTORISTA ─────────────────────────────────────────────────────────────
 
     socket.on("driver:online", async (data: Omit<DriverInfo, "socketId">) => {
-      // Verificar aprovação do motorista antes de permitir ficar online
       try {
         const driverUserId = parseInt(data.driverId);
         if (!isNaN(driverUserId)) {
           const [driver] = await db
-            .select({ isApproved: driversTable.isApproved })
-            .from(driversTable)
-            .where(eq(driversTable.userId, driverUserId));
+            .select({ isApproved: usersTable.isApproved })
+            .from(usersTable)
+            .where(eq(usersTable.id, driverUserId));
           if (!driver?.isApproved) {
             socket.emit("driver:error", {
               code: "NOT_APPROVED",
@@ -197,12 +190,12 @@ export function registerRideSocket(io: Server) {
         }
       } catch (err) {
         logger.error({ err }, "Erro ao verificar aprovação do motorista");
+        return;
       }
       const info: DriverInfo = { ...data, socketId: socket.id };
       onlineDrivers.set(data.driverId, info);
       logger.info({ driverId: data.driverId, total: onlineDrivers.size }, "Driver online");
 
-      // Verificar fila de espera — despachar corridas aguardando motorista
       for (const [waitRideId, waiting] of waitingRides.entries()) {
         const { ride: waitRide, timeoutId: waitTimeout } = waiting;
         const nearbyForWaiting = getNearbyDrivers(waitRide.origin.lat, waitRide.origin.lng, waitRide.rideType);
@@ -211,7 +204,6 @@ export function registerRideSocket(io: Server) {
           waitingRides.delete(waitRideId);
           logger.info({ rideId: waitRideId, driverId: data.driverId }, "Motorista conectou — despachando corrida da fila de espera");
           nearbyForWaiting.forEach((driver) => dispatchToDriver(io, waitRide, driver));
-          // Confirmar preço e PIN ao passageiro
           const passengerSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
           if (passengerSocket) {
             passengerSocket.emit("passenger:price_confirmed", {
@@ -220,7 +212,6 @@ export function registerRideSocket(io: Server) {
               pin: waitRide.pin,
             });
           }
-          // Timeout de 15s para aceitação do motorista
           setTimeout(async () => {
             if (pendingRides.has(waitRideId)) {
               const passSocket = io.sockets.sockets.get(waitRide.passengerSocketId);
@@ -247,7 +238,6 @@ export function registerRideSocket(io: Server) {
     // ─── PASSAGEIRO ────────────────────────────────────────────────────────────
 
     socket.on("passenger:request_ride", async (data: Omit<RideRequest, "passengerSocketId">) => {
-      // Verificar que o passageiro autenticado é o mesmo que está solicitando (anti-spoofing)
       if (userId && String(userId) !== String(data.passengerId)) {
         socket.emit("passenger:error", {
           code: "FORBIDDEN",
@@ -257,7 +247,6 @@ export function registerRideSocket(io: Server) {
         return;
       }
 
-      // Verificar se o passageiro tem documentos aprovados
       try {
         const passengerId = parseInt(data.passengerId);
         if (!isNaN(passengerId)) {
@@ -281,11 +270,9 @@ export function registerRideSocket(io: Server) {
       const origin = data.origin as RideOriginDest;
       const destination = data.destination as RideOriginDest;
 
-      // Calcular preço no servidor (fonte de verdade)
       const distanceKm = data.distanceKm ?? getDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
       const { total: serverPrice } = calculatePrice(distanceKm, data.rideType);
 
-      // Usar PIN enviado pelo cliente (já mostrado ao passageiro) ou gerar um novo
       const ridePin = data.pin ?? Math.floor(1000 + Math.random() * 9000).toString();
 
       const ride: RideRequest = {
@@ -299,7 +286,6 @@ export function registerRideSocket(io: Server) {
       pendingRides.set(data.rideId, ride);
       logger.info({ rideId: data.rideId, passengerId: data.passengerId, price: serverPrice }, "Corrida solicitada");
 
-      // Persistir corrida no banco
       try {
         await db.insert(ridesTable).values({
           id: data.rideId,
@@ -324,7 +310,6 @@ export function registerRideSocket(io: Server) {
       const nearbyDrivers = getNearbyDrivers(origin.lat, origin.lng, data.rideType);
 
       if (nearbyDrivers.length === 0) {
-        // Sem motoristas agora — aguarda até 60s por um motorista que se conecte
         socket.emit("passenger:waiting_for_driver", { rideId: data.rideId, waitSeconds: 60 });
         logger.info({ rideId: data.rideId }, "Sem motoristas disponíveis — aguardando até 60s na fila");
         const waitTimeoutId = setTimeout(async () => {
@@ -341,8 +326,6 @@ export function registerRideSocket(io: Server) {
       }
 
       nearbyDrivers.forEach((driver) => dispatchToDriver(io, ride, driver));
-
-      // Confirmar preço e PIN ao passageiro (preço calculado pelo servidor)
       socket.emit("passenger:price_confirmed", { rideId: data.rideId, price: serverPrice, pin: ridePin });
 
       setTimeout(async () => {
@@ -420,7 +403,6 @@ export function registerRideSocket(io: Server) {
       const active = activeRides.get(rideId);
       if (!active) return;
 
-      // Verificar PIN antes de iniciar a viagem
       if (pin) {
         try {
           const [ride] = await db.select({ pin: ridesTable.pin }).from(ridesTable).where(eq(ridesTable.id, rideId));
@@ -457,10 +439,10 @@ export function registerRideSocket(io: Server) {
 
         const driverUserId = parseInt(active.driverId);
         if (!isNaN(driverUserId)) {
-          await db.update(driversTable)
-            .set({ totalRides: sql`COALESCE(total_rides, 0) + 1` })
-            .where(eq(driversTable.userId, driverUserId))
-            .catch(() => {});
+          await db.update(usersTable)
+            .set({ totalRides: sql`${usersTable.totalRides} + 1` })
+            .where(eq(usersTable.id, driverUserId));
+          logger.info({ driverId: driverUserId, rideId }, "totalRides incrementado para motorista");
         }
       } catch (err) {
         logger.error({ err }, "Erro ao finalizar corrida no banco");
@@ -514,7 +496,6 @@ export function registerRideSocket(io: Server) {
       const active = activeRides.get(rideId);
       if (!active) return;
 
-      // Verificar que quem envia é realmente participante desta corrida
       const isParticipant =
         socket.id === active.passengerSocketId ||
         socket.id === active.driverSocketId;
@@ -524,12 +505,6 @@ export function registerRideSocket(io: Server) {
       }
 
       const msg: ChatMessage = { msgId, senderId, senderName, text, timestamp: Date.now() };
-
-      try {
-        await db.insert(chatMessagesTable).values({ senderId, senderName, message: text, rideId });
-      } catch (err) {
-        logger.error({ err }, "Erro ao persistir mensagem");
-      }
 
       const isPassenger = socket.id === active.passengerSocketId;
       const targetSocketId = isPassenger ? active.driverSocketId : active.passengerSocketId;
@@ -544,7 +519,6 @@ export function registerRideSocket(io: Server) {
       io.to(active.passengerSocketId).emit("ride:emergency_confirmed", { rideId });
     });
 
-    // SOS emitido pelo motorista — mesma lógica do passageiro
     socket.on("driver:sos", ({ rideId }: { rideId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
