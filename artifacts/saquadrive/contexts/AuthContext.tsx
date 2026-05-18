@@ -192,7 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const profileRes = await fetchWithTimeout(`${API_URL}/api/users/me`, { headers: { Authorization: `Bearer ${data.token}` } }, 8000);
       if (profileRes.ok) {
         const profile = await profileRes.json() as Partial<User>;
-        Object.assign(userData, { driverRating: profile.driverRating, totalRides: profile.totalRides, cnhStatus: profile.cnhStatus, crlvStatus: profile.crlvStatus, rgStatus: profile.rgStatus ?? userData.rgStatus, vehiclePlate: profile.vehiclePlate, vehicleModel: profile.vehicleModel, suspended: profile.suspended, cancellationFeeOwed: profile.cancellationFeeOwed });
+        Object.assign(userData, { driverRating: profile.driverRating, totalRides: profile.totalRides, cnhStatus: profile.cnhStatus, crlvStatus: profile.crlvStatus, rgStatus: profile.rgStatus ?? userData.rgStatus, vehiclePlate: profile.vehiclePlate, vehicleModel: profile.vehicleModel, vehicleType: profile.vehicleType, vehicleYear: profile.vehicleYear, suspended: profile.suspended, cancellationFeeOwed: profile.cancellationFeeOwed });
         await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData));
       }
     } catch {}
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await Promise.all(saves);
     try {
       const profileRes = await fetchWithTimeout(`${API_URL}/api/users/me`, { headers: { Authorization: `Bearer ${data.token}` } }, 8000);
-      if (profileRes.ok) { const profile = await profileRes.json() as Partial<User>; Object.assign(userData, { driverRating: profile.driverRating, totalRides: profile.totalRides, cnhStatus: profile.cnhStatus, crlvStatus: profile.crlvStatus, rgStatus: profile.rgStatus ?? userData.rgStatus, vehiclePlate: profile.vehiclePlate, vehicleModel: profile.vehicleModel }); await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)); }
+      if (profileRes.ok) { const profile = await profileRes.json() as Partial<User>; Object.assign(userData, { driverRating: profile.driverRating, totalRides: profile.totalRides, cnhStatus: profile.cnhStatus, crlvStatus: profile.crlvStatus, rgStatus: profile.rgStatus ?? userData.rgStatus, vehiclePlate: profile.vehiclePlate, vehicleModel: profile.vehicleModel, vehicleType: profile.vehicleType, vehicleYear: profile.vehicleYear }); await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)); }
     } catch {}
     setUser(userData); setToken(data.token);
     // Registra token de push em background
