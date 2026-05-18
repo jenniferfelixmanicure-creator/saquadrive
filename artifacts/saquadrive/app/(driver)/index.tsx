@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import * as Location from "expo-location";
 import {
-  Alert, Animated, Easing, FlatList, Linking, Modal, Platform, ScrollView,
+  Alert, Animated, Easing, FlatList, Image, Linking, Modal, Platform, ScrollView,
   StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -165,7 +165,7 @@ export default function DriverHomeScreen() {
         socket.emit("driver:online", {
           driverId: user.id, name: user.name, car: user.vehicleModel ?? "Veículo",
           color: "Prata", plate: user.vehiclePlate ?? "ABC-1234",
-          rating: user.driverRating ?? 4.9, photo: user.name.slice(0, 2).toUpperCase(), eta: 4,
+          rating: user.driverRating ?? 4.9, photo: user.profilePhotoUrl ?? user.name.slice(0, 2).toUpperCase(), eta: 4,
           latitude: driverLocation.latitude, longitude: driverLocation.longitude,
           vehicleYear: user.vehicleYear, vehicleType: user.vehicleType ?? "car",
         });
@@ -360,9 +360,13 @@ export default function DriverHomeScreen() {
             {requests.map((item) => (
               <View key={item.rideId} style={[styles.requestCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                 <View style={styles.requestHeader}>
-                  <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-                    <Text style={styles.avatarText}>{(item.passenger ?? "P")[0]}</Text>
-                  </View>
+                  {item.passengerPhotoUrl ? (
+                    <Image source={{ uri: item.passengerPhotoUrl }} style={[styles.avatar, { borderRadius: 22 }]} />
+                  ) : (
+                    <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
+                      <Text style={styles.avatarText}>{(item.passenger ?? "P")[0]}</Text>
+                    </View>
+                  )}
                   <View style={styles.requestInfo}>
                     <Text style={[styles.passengerName, { color: colors.foreground }]}>{item.passenger ?? "Passageiro"}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -409,9 +413,13 @@ export default function DriverHomeScreen() {
             </View>
 
             <View style={styles.activeRideRow}>
-              <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-                <Text style={styles.avatarText}>{(activeRide.passenger ?? "P")[0]}</Text>
-              </View>
+              {activeRide.passengerPhotoUrl ? (
+                <Image source={{ uri: activeRide.passengerPhotoUrl }} style={[styles.avatar, { borderRadius: 22 }]} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
+                  <Text style={styles.avatarText}>{(activeRide.passenger ?? "P")[0]}</Text>
+                </View>
+              )}
               <View style={styles.requestInfo}>
                 <Text style={[styles.passengerName, { color: colors.foreground }]}>{activeRide.passenger ?? "Passageiro"}</Text>
                 <Text style={[styles.requestMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
