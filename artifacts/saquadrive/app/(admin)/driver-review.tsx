@@ -12,6 +12,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -190,11 +191,61 @@ export default function DriverReviewScreen() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [globalLoading, setGlobalLoading] = useState(false);
 
+  const [editingVehicle, setEditingVehicle] = useState(false);
+  const [vehicleForm, setVehicleForm] = useState({
+    vehicleModel: "", vehiclePlate: "", vehicleColor: "",
+    vehicleType: "car", vehicleYear: "",
+  });
+  const [vehicleSaving, setVehicleSaving] = useState(false);
+
   useEffect(() => {
     if (!adminSecret) {
       AsyncStorage.getItem(ADMIN_KEY).then((v) => { if (v) setAdminSecret(v); });
     }
   }, [adminSecret]);
+
+  function startVehicleEdit() {
+    if (!data) return;
+    setVehicleForm({
+      vehicleModel: data.vehicleModel ?? "",
+      vehiclePlate: data.vehiclePlate ?? "",
+      vehicleColor: data.vehicleColor ?? "",
+      vehicleType: data.vehicleType ?? "car",
+      vehicleYear: data.vehicleYear ? String(data.vehicleYear) : "",
+    });
+    setEditingVehicle(true);
+  }
+
+  async function handleSaveVehicle() {
+    setVehicleSaving(true);
+    try {
+      const payload: Record<string, string | number> = {};
+      if (vehicleForm.vehicleModel.trim()) payload.vehicleModel = vehicleForm.vehicleModel.trim();
+      if (vehicleForm.vehiclePlate.trim()) payload.vehiclePlate = vehicleForm.vehiclePlate.trim().toUpperCase();
+      if (vehicleForm.vehicleColor.trim()) payload.vehicleColor = vehicleForm.vehicleColor.trim();
+      if (vehicleForm.vehicleType) payload.vehicleType = vehicleForm.vehicleType;
+      const year = parseInt(vehicleForm.vehicleYear);
+      if (!isNaN(year) && year > 1900) payload.vehicleYear = year;
+
+      const res = await fetch(`${API_URL}/api/admin/drivers/${driverId}/vehicle`, {
+        method: "PATCH",
+        headers: { "x-admin-secret": adminSecret, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json() as { message?: string };
+      if (!res.ok) {
+        Alert.alert("Erro", json.message ?? "Não foi possível salvar.");
+        return;
+      }
+      Alert.alert("Salvo!", "Dados do veículo atualizados com sucesso.");
+      setEditingVehicle(false);
+      await fetchDriver();
+    } catch {
+      Alert.alert("Erro", "Falha de conexão.");
+    } finally {
+      setVehicleSaving(false);
+    }
+  }
 
   const fetchDriver = useCallback(async () => {
     if (!adminSecret) return;
@@ -334,35 +385,145 @@ export default function DriverReviewScreen() {
           </View>
 
           <View style={styles.vehicleCard}>
-            <Text style={styles.sectionTitle}>VEÍCULO</Text>
-            <View style={styles.vehicleRow}>
-              <View style={styles.vehicleField}>
-                <Text style={styles.vehicleLabel}>Modelo</Text>
-                <Text style={styles.vehicleValue}>{data.vehicleModel || "—"}</Text>
-              </View>
-              <View style={styles.vehicleField}>
-                <Text style={styles.vehicleLabel}>Placa</Text>
-                <Text style={styles.vehicleValue}>{data.vehiclePlate || "—"}</Text>
-              </View>
-              <View style={styles.vehicleField}>
-                <Text style={styles.vehicleLabel}>Tipo</Text>
-                <Text style={styles.vehicleValue}>{data.vehicleType || "—"}</Text>
-              </View>
+            <View style={styles.vehicleCardHeader}>
+              <Text style={styles.sectionTitle}>VEÍCULO</Text>
+              {!editingVehicle && (
+                <TouchableOpacity style={styles.editVehicleBtn} onPress={startVehicleEdit} activeOpacity={0.8}>
+                  <Feather name="edit-2" size={13} color="#6366f1" />
+                  <Text style={styles.editVehicleBtnText}>Editar</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            <View style={styles.vehicleRow}>
-              <View style={styles.vehicleField}>
-                <Text style={styles.vehicleLabel}>Cor</Text>
-                <Text style={styles.vehicleValue}>{data.vehicleColor || "—"}</Text>
+
+            {editingVehicle ? (
+              <View style={{ gap: 10 }}>
+                <View style={styles.vehicleRow}>
+                  <View style={{ flex: 2 }}>
+                    <Text style={styles.vehicleLabel}>MODELO</Text>
+                    <TextInput
+                      style={styles.vehicleInput}
+                      value={vehicleForm.vehicleModel}
+                      onChangeText={(v) => setVehicleForm(f => ({ ...f, vehicleModel: v }))}
+                      placeholder="Ex: Fiat Uno 2020"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vehicleLabel}>PLACA</Text>
+                    <TextInput
+                      style={styles.vehicleInput}
+                      value={vehicleForm.vehiclePlate}
+                      onChangeText={(v) => setVehicleForm(f => ({ ...f, vehiclePlate: v.toUpperCase() }))}
+                      placeholder="ABC1D23"
+                      placeholderTextColor="#475569"
+                      autoCapitalize="characters"
+                      maxLength={8}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.vehicleRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vehicleLabel}>COR</Text>
+                    <TextInput
+                      style={styles.vehicleInput}
+                      value={vehicleForm.vehicleColor}
+                      onChangeText={(v) => setVehicleForm(f => ({ ...f, vehicleColor: v }))}
+                      placeholder="Ex: Branco"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vehicleLabel}>ANO</Text>
+                    <TextInput
+                      style={styles.vehicleInput}
+                      value={vehicleForm.vehicleYear}
+                      onChangeText={(v) => setVehicleForm(f => ({ ...f, vehicleYear: v }))}
+                      placeholder="2022"
+                      placeholderTextColor="#475569"
+                      keyboardType="numeric"
+                      maxLength={4}
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={styles.vehicleLabel}>TIPO</Text>
+                  <View style={styles.vehicleTypeRow}>
+                    <TouchableOpacity
+                      style={[styles.typeBtn, vehicleForm.vehicleType === "car" && styles.typeBtnActive]}
+                      onPress={() => setVehicleForm(f => ({ ...f, vehicleType: "car" }))}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="truck" size={14} color={vehicleForm.vehicleType === "car" ? "#fff" : "#64748b"} />
+                      <Text style={[styles.typeBtnText, vehicleForm.vehicleType === "car" && styles.typeBtnTextActive]}>Carro</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.typeBtn, vehicleForm.vehicleType === "moto" && styles.typeBtnActive]}
+                      onPress={() => setVehicleForm(f => ({ ...f, vehicleType: "moto" }))}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="zap" size={14} color={vehicleForm.vehicleType === "moto" ? "#fff" : "#64748b"} />
+                      <Text style={[styles.typeBtnText, vehicleForm.vehicleType === "moto" && styles.typeBtnTextActive]}>Moto</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.vehicleSaveRow}>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, styles.approveBtn, { flex: 1 }, vehicleSaving && { opacity: 0.6 }]}
+                    onPress={handleSaveVehicle}
+                    disabled={vehicleSaving}
+                    activeOpacity={0.85}
+                  >
+                    {vehicleSaving
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <><Feather name="save" size={15} color="#fff" /><Text style={styles.actionBtnText}>Salvar veículo</Text></>
+                    }
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionBtn, { flex: 1, backgroundColor: "#334155" }]}
+                    onPress={() => setEditingVehicle(false)}
+                    disabled={vehicleSaving}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="x" size={15} color="#94a3b8" />
+                    <Text style={[styles.actionBtnText, { color: "#94a3b8" }]}>Cancelar</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-              <View style={styles.vehicleField}>
-                <Text style={styles.vehicleLabel}>Ano</Text>
-                <Text style={styles.vehicleValue}>{data.vehicleYear ?? "—"}</Text>
-              </View>
-              <View style={styles.vehicleField}>
-                <Text style={styles.vehicleLabel}>Corridas</Text>
-                <Text style={styles.vehicleValue}>{data.totalRides ?? 0}</Text>
-              </View>
-            </View>
+            ) : (
+              <>
+                <View style={styles.vehicleRow}>
+                  <View style={styles.vehicleField}>
+                    <Text style={styles.vehicleLabel}>Modelo</Text>
+                    <Text style={styles.vehicleValue}>{data.vehicleModel || "—"}</Text>
+                  </View>
+                  <View style={styles.vehicleField}>
+                    <Text style={styles.vehicleLabel}>Placa</Text>
+                    <Text style={styles.vehicleValue}>{data.vehiclePlate || "—"}</Text>
+                  </View>
+                  <View style={styles.vehicleField}>
+                    <Text style={styles.vehicleLabel}>Tipo</Text>
+                    <Text style={styles.vehicleValue}>{data.vehicleType === "moto" ? "Moto" : data.vehicleType === "car" ? "Carro" : "—"}</Text>
+                  </View>
+                </View>
+                <View style={styles.vehicleRow}>
+                  <View style={styles.vehicleField}>
+                    <Text style={styles.vehicleLabel}>Cor</Text>
+                    <Text style={styles.vehicleValue}>{data.vehicleColor || "—"}</Text>
+                  </View>
+                  <View style={styles.vehicleField}>
+                    <Text style={styles.vehicleLabel}>Ano</Text>
+                    <Text style={styles.vehicleValue}>{data.vehicleYear ?? "—"}</Text>
+                  </View>
+                  <View style={styles.vehicleField}>
+                    <Text style={styles.vehicleLabel}>Corridas</Text>
+                    <Text style={styles.vehicleValue}>{data.totalRides ?? 0}</Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
 
           <Text style={[styles.sectionTitle, { paddingHorizontal: 4, marginTop: 8 }]}>DOCUMENTOS</Text>
@@ -461,14 +622,35 @@ const styles = StyleSheet.create({
   profileSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#94a3b8" },
 
   vehicleCard: { backgroundColor: "#1e293b", borderRadius: 14, padding: 16, gap: 12 },
+  vehicleCardHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  editVehicleBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#6366f111", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+  },
+  editVehicleBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#6366f1" },
   sectionTitle: {
     fontSize: 11, fontFamily: "Inter_700Bold",
     color: "#475569", letterSpacing: 0.8, textTransform: "uppercase",
   },
   vehicleRow: { flexDirection: "row", gap: 12 },
   vehicleField: { flex: 1, gap: 2 },
-  vehicleLabel: { fontSize: 10, fontFamily: "Inter_500Medium", color: "#64748b", textTransform: "uppercase" },
+  vehicleLabel: { fontSize: 10, fontFamily: "Inter_500Medium", color: "#64748b", textTransform: "uppercase", marginBottom: 4 },
   vehicleValue: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#e2e8f0" },
+  vehicleInput: {
+    backgroundColor: "#0f172a", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8,
+    fontSize: 14, fontFamily: "Inter_400Regular", color: "#f1f5f9",
+    borderWidth: 1, borderColor: "#334155",
+  },
+  vehicleTypeRow: { flexDirection: "row", gap: 8, marginTop: 2 },
+  typeBtn: {
+    flex: 1, height: 38, borderRadius: 8, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 6,
+    backgroundColor: "#0f172a", borderWidth: 1, borderColor: "#334155",
+  },
+  typeBtnActive: { backgroundColor: "#6366f1", borderColor: "#6366f1" },
+  typeBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#64748b" },
+  typeBtnTextActive: { color: "#fff" },
+  vehicleSaveRow: { flexDirection: "row", gap: 10, marginTop: 4 },
 
   docCard: { backgroundColor: "#1e293b", borderRadius: 14, padding: 16, gap: 12 },
   docCardHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },

@@ -40,6 +40,8 @@ router.get("/admin/drivers/all", async (req: AuthRequest, res) => {
       crlvStatus: usersTable.crlvStatus, rgUrl: usersTable.rgUrl,
       cnhUrl: usersTable.cnhUrl, crlvUrl: usersTable.crlvUrl,
       vehiclePlate: usersTable.vehiclePlate, vehicleModel: usersTable.vehicleModel,
+      vehicleColor: usersTable.vehicleColor, vehicleType: usersTable.vehicleType,
+      vehicleYear: usersTable.vehicleYear,
       driverRating: usersTable.driverRating, totalRides: usersTable.totalRides,
       profilePhotoUrl: usersTable.profilePhotoUrl, createdAt: usersTable.createdAt,
     }).from(usersTable).where(eq(usersTable.role, "driver"));
@@ -59,6 +61,8 @@ router.get("/admin/drivers/pending", async (req: AuthRequest, res) => {
       crlvStatus: usersTable.crlvStatus, rgUrl: usersTable.rgUrl,
       cnhUrl: usersTable.cnhUrl, crlvUrl: usersTable.crlvUrl,
       vehiclePlate: usersTable.vehiclePlate, vehicleModel: usersTable.vehicleModel,
+      vehicleColor: usersTable.vehicleColor, vehicleType: usersTable.vehicleType,
+      vehicleYear: usersTable.vehicleYear,
       profilePhotoUrl: usersTable.profilePhotoUrl,
     }).from(usersTable).where(
       sql`${usersTable.role} = 'driver' AND ${usersTable.isApproved} = false`
@@ -99,6 +103,44 @@ router.post("/admin/drivers/:id/approve", async (req: AuthRequest, res) => {
     const [updated] = await db.update(usersTable)
       .set({ isApproved: true, rgStatus: "approved", cnhStatus: "approved", crlvStatus: "approved" })
       .where(eq(usersTable.id, id)).returning({ id: usersTable.id, isApproved: usersTable.isApproved });
+    res.json({ ...updated, id: String(updated.id) });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+router.patch("/admin/drivers/:id/vehicle", async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    const { vehicleModel, vehiclePlate, vehicleColor, vehicleType, vehicleYear } = req.body as {
+      vehicleModel?: string;
+      vehiclePlate?: string;
+      vehicleColor?: string;
+      vehicleType?: string;
+      vehicleYear?: number;
+    };
+    const updates: Partial<typeof usersTable.$inferInsert> = {};
+    if (vehicleModel !== undefined) updates.vehicleModel = vehicleModel;
+    if (vehiclePlate !== undefined) updates.vehiclePlate = vehiclePlate;
+    if (vehicleColor !== undefined) updates.vehicleColor = vehicleColor;
+    if (vehicleType !== undefined) updates.vehicleType = vehicleType;
+    if (vehicleYear !== undefined) updates.vehicleYear = vehicleYear;
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ message: "Nenhum campo fornecido" });
+      return;
+    }
+    const [updated] = await db.update(usersTable).set(updates)
+      .where(eq(usersTable.id, id))
+      .returning({
+        id: usersTable.id,
+        vehicleModel: usersTable.vehicleModel,
+        vehiclePlate: usersTable.vehiclePlate,
+        vehicleColor: usersTable.vehicleColor,
+        vehicleType: usersTable.vehicleType,
+        vehicleYear: usersTable.vehicleYear,
+      });
+    req.log.info({ id, updates }, "Vehicle info updated by admin");
     res.json({ ...updated, id: String(updated.id) });
   } catch (err) {
     req.log.error(err);
