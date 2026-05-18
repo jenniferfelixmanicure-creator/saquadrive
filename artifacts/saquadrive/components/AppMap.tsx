@@ -14,6 +14,7 @@ type Props = {
   driverRealtimeLocation?: { latitude: number; longitude: number } | null;
   routeCoordinates?: { latitude: number; longitude: number }[];
   onMapPress?: (location: Location) => void;
+  onCenterChange?: (lat: number, lng: number) => void;
 };
 
 export default function AppMap({

@@ -31,13 +31,14 @@ import React, { useEffect, useRef, useState } from "react";
     routeCoordinates?: { latitude: number; longitude: number }[];
     driverRealtimeLocation?: { latitude: number; longitude: number } | null;
     onMapPress?: (loc: { address: string; lat: number; lng: number }) => void;
+    onCenterChange?: (lat: number, lng: number) => void;
   };
 
   function MapLibreMap(props: Props) {
     const {
       origin, destination,
       originColor = "#FF6B00", destColor = "#00C4FF",
-      routeCoordinates, driverRealtimeLocation, onMapPress,
+      routeCoordinates, driverRealtimeLocation, onMapPress, onCenterChange,
     } = props;
 
     const cameraRef = useRef<any>(null);
@@ -104,6 +105,17 @@ import React, { useEffect, useRef, useState } from "react";
       onMapPress({ lat, lng, address });
     }
 
+    function handleRegionDidChange(feature: { geometry?: { coordinates?: number[] } }) {
+      try {
+        const coords = feature?.geometry?.coordinates;
+        if (!coords) return;
+        const [lng, lat] = coords;
+        if (typeof lat === "number" && typeof lng === "number") {
+          onCenterChange?.(lat, lng);
+        }
+      } catch {}
+    }
+
     // v11: MapLibreGL.Map, prop mapStyle (era styleURL)
     const MapView = MapLibreGL.Map;
     // v11: Marker (era PointAnnotation)
@@ -121,6 +133,7 @@ import React, { useEffect, useRef, useState } from "react";
           style={styles.map}
           mapStyle={STYLE_URL}
           onPress={onMapPress ? handleMapPress : undefined}
+          onRegionDidChange={onCenterChange ? handleRegionDidChange : undefined}
         >
           {/* v11 Camera: center/zoom em vez de centerCoordinate/zoomLevel */}
           <Camera

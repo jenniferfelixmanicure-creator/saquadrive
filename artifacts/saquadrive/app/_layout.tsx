@@ -17,6 +17,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import AppSplash from "@/components/AppSplash";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RideProvider } from "@/contexts/RideContext";
 import { SocketProvider } from "@/contexts/SocketContext";
@@ -70,7 +71,7 @@ export default function RootLayout() {
     }
   }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  if (!fontsLoaded && !fontError) return <AppSplash />;
 
   return (
     <SafeAreaProvider>
