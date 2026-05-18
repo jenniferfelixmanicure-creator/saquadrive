@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import {
-  Alert, Animated, Easing, FlatList, Modal, Platform, ScrollView,
+  Alert, Animated, Easing, FlatList, Image, Modal, Platform, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -510,9 +510,13 @@ export default function PassengerHomeScreen() {
               </View>
             )}
             <View style={styles.driverCard}>
-              <View style={[styles.driverAvatar, { backgroundColor: colors.secondary }]}>
-                <Text style={styles.driverAvatarText}>{currentRide.driver.photo ?? currentRide.driver.name[0]}</Text>
-              </View>
+              {currentRide.driver.photo?.startsWith("http") ? (
+                <Image source={{ uri: currentRide.driver.photo }} style={styles.driverAvatar} />
+              ) : (
+                <View style={[styles.driverAvatar, { backgroundColor: colors.secondary }]}>
+                  <Text style={styles.driverAvatarText}>{currentRide.driver.photo ?? currentRide.driver.name[0]}</Text>
+                </View>
+              )}
               <View style={styles.driverInfo}>
                 <Text style={[styles.driverName, { color: colors.foreground }]}>{currentRide.driver.name}</Text>
                 <Text style={[styles.driverMeta, { color: colors.mutedForeground }]}>⭐ {currentRide.driver.rating.toFixed(1)} · {currentRide.driver.car} {currentRide.driver.color}</Text>
