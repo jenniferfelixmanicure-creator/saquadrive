@@ -24,7 +24,8 @@ function calculatePrice(distanceKm: number, rideType: string): { total: number; 
   const hour = new Date().getHours();
   const isPeak = PEAK_HOURS.some((p) => hour >= p.start && hour <= p.end);
   const surge = isPeak ? 1.5 : 1.0;
-  const total = Math.round((BASE_FEE + distanceKm * perKm) * surge * 100) / 100;
+  const raw = Math.round((BASE_FEE + distanceKm * perKm) * surge * 100) / 100;
+  const total = Math.max(raw, 10);
   return { total, surgeMultiplier: surge };
 }
 
