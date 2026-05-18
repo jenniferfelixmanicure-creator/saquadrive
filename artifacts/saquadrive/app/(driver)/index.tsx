@@ -628,11 +628,11 @@ export default function DriverHomeScreen() {
               >
                 <View style={styles.requestHeader}>
                   <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-                    <Text style={styles.avatarText}>{item.passenger[0]}</Text>
+                    <Text style={styles.avatarText}>{(item.passenger ?? 'P')[0]}</Text>
                   </View>
                   <View style={styles.requestInfo}>
                     <Text style={[styles.passengerName, { color: colors.foreground }]}>
-                      {item.passenger}
+                      {item.passenger ?? 'Passageiro'}
                     </Text>
                     <Text style={[styles.requestMeta, { color: colors.mutedForeground }]}>
                       {item.distance} · {item.eta} min para buscar
