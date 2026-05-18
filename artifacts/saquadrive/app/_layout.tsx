@@ -48,11 +48,20 @@ export default function RootLayout() {
     ...Feather.font,
   });
 
-  // Esconde a splash nativa IMEDIATAMENTE ao montar o componente.
-  // Assim o Android 12 não fica segurando o ícone pequeno na tela —
-  // o AppSplash (fullscreen) toma o lugar instantaneamente.
+  // Técnica "fake splash": esconde a splash nativa IMEDIATAMENTE e
+  // exibe o AppSplash (React Native) como substituto — 100% sob controle,
+  // sem limitações do Android 12+.
+  // O estado minTimeElapsed garante que o AppSplash apareça por pelo menos
+  // MIN_SPLASH_MS ms, evitando flash branco em dispositivos rápidos.
+  const MIN_SPLASH_MS = 2000;
+  const [minTimeElapsed, setMinTimeElapsed] = React.useState(false);
+
   useEffect(() => {
+    // 1) Esconde splash nativa antes do primeiro frame
     SplashScreen.hideAsync().catch(() => {});
+    // 2) Garante tempo mínimo de exibição do AppSplash
+    const t = setTimeout(() => setMinTimeElapsed(true), MIN_SPLASH_MS);
+    return () => clearTimeout(t);
   }, []);
 
   useEffect(() => {
@@ -69,7 +78,8 @@ export default function RootLayout() {
     }
   }, []);
 
-  if (!fontsLoaded && !fontError) return <AppSplash />;
+  const appReady = (fontsLoaded || !!fontError) && minTimeElapsed;
+  if (!appReady) return <AppSplash />;
 
   return (
     <SafeAreaProvider>
