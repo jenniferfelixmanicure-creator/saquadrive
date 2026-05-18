@@ -95,20 +95,28 @@ function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function getDriverCategory(vehicleYear: number): "basico" | "intermediario" | "vip" {
+  if (vehicleYear >= 2020) return "vip";
+  if (vehicleYear >= 2011) return "intermediario";
+  return "basico";
+}
+
+function canDriverHandleRide(driver: DriverInfo, rideType: string): boolean {
+  if (rideType === "moto") return driver.vehicleType === "moto";
+  if (driver.vehicleType !== "car") return false;
+  const y = driver.vehicleYear;
+  if (!y) return false;
+  const category = getDriverCategory(y);
+  if (category === "vip") return true;
+  if (category === "intermediario") return rideType !== "vip";
+  return rideType === "basico";
+}
+
 function getNearbyDrivers(lat: number, lng: number, rideType: string, radius = 10) {
   const available: (DriverInfo & { distanceToPassenger: number })[] = [];
   for (const driver of onlineDrivers.values()) {
     if (Array.from(activeRides.values()).some((r) => r.driverId === driver.driverId)) continue;
-    if (rideType === "moto") {
-      if (driver.vehicleType !== "moto") continue;
-    } else {
-      if (driver.vehicleType !== "car") continue;
-      const y = driver.vehicleYear;
-      if (!y) continue;
-      if (rideType === "basico" && (y < 2005 || y > 2010)) continue;
-      if (rideType === "intermediario" && (y < 2011 || y > 2019)) continue;
-      if (rideType === "vip" && y < 2020) continue;
-    }
+    if (!canDriverHandleRide(driver, rideType)) continue;
     const dist = getDistanceKm(lat, lng, driver.latitude, driver.longitude);
     if (dist <= radius) available.push({ ...driver, distanceToPassenger: dist });
   }
