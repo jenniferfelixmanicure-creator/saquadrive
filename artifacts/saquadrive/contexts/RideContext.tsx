@@ -165,6 +165,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       setRideStatus("rating");
     });
 
+    socket.on("passenger:waiting_for_driver", ({ rideId }: { rideId: string; waitSeconds: number }) => {
+      if (currentRideRef.current?.id !== rideId) return;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
+    });
+
     socket.on("passenger:no_drivers", ({ rideId }: { rideId: string }) => {
       if (currentRideRef.current?.id !== rideId) return;
       timersRef.current.forEach(clearTimeout);
@@ -172,6 +178,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       setRideStatus("idle");
       setCurrentRide(null);
       currentRideRef.current = null;
+      setRouteCoordinates([]);
+      setDriverRealtimeLocation(null);
       Alert.alert("Sem motoristas", "Nenhum motorista disponível na sua região agora. Tente novamente em alguns instantes.");
     });
 
@@ -227,6 +235,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       socket.off("passenger:driver_arrived");
       socket.off("passenger:trip_started");
       socket.off("passenger:trip_completed");
+      socket.off("passenger:waiting_for_driver");
       socket.off("passenger:no_drivers");
       socket.off("passenger:price_confirmed");
       socket.off("passenger:error");
@@ -316,8 +325,13 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     const fallbackTimer = setTimeout(() => {
       if (currentRideRef.current?.status === "finding") {
         setRideStatus("idle");
+        setCurrentRide(null);
+        currentRideRef.current = null;
+        setRouteCoordinates([]);
+        setDriverRealtimeLocation(null);
+        Alert.alert("Sem motoristas", "Nenhum motorista disponível na sua região agora. Tente novamente em alguns instantes.");
       }
-    }, 20000);
+    }, 70000);
     timersRef.current.push(fallbackTimer);
   }
 
