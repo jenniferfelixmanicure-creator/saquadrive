@@ -76,6 +76,8 @@ const waitingRides = new Map<string, {
   timeoutId: ReturnType<typeof setTimeout>;
 }>();
 
+const rideRejections = new Map<string, Set<string>>(); // rideId -> Set of rejecting driverIds
+
 const activeRides = new Map<string, {
   passengerId: string;
   driverId: string;
@@ -349,6 +351,7 @@ export function registerRideSocket(io: Server) {
       if (!acceptingDriver) return;
 
       pendingRides.delete(rideId);
+      rideRejections.delete(rideId);
       activeRides.set(rideId, {
         passengerId: ride.passengerId,
         driverId: acceptingDriver.driverId,
@@ -389,7 +392,46 @@ export function registerRideSocket(io: Server) {
     });
 
     socket.on("driver:reject", ({ rideId }: { rideId: string }) => {
-      logger.info({ rideId }, "Motorista recusou corrida");
+      const ride = pendingRides.get(rideId);
+      if (!ride) return;
+
+      // Track which driver rejected this ride
+      let rejectedSet = rideRejections.get(rideId);
+      if (!rejectedSet) { rejectedSet = new Set(); rideRejections.set(rideId, rejectedSet); }
+
+      let rejectingDriverId: string | undefined;
+      for (const [id, d] of onlineDrivers.entries()) {
+        if (d.socketId === socket.id) { rejectingDriverId = id; break; }
+      }
+      if (rejectingDriverId) rejectedSet.add(rejectingDriverId);
+
+      logger.info({ rideId, driverId: rejectingDriverId }, "Motorista recusou corrida");
+
+      // Find drivers who are online, nearby, and have NOT rejected yet
+      const remaining = getNearbyDrivers(ride.origin.lat, ride.origin.lng, ride.rideType)
+        .filter(d => !rejectedSet!.has(d.driverId));
+
+      if (remaining.length === 0) {
+        // All available drivers rejected — notify passenger immediately
+        const passengerSocket = io.sockets.sockets.get(ride.passengerSocketId);
+        if (passengerSocket) passengerSocket.emit("passenger:no_drivers", { rideId });
+        pendingRides.delete(rideId);
+        rideRejections.delete(rideId);
+        logger.info({ rideId }, "Todos os motoristas recusaram — passageiro notificado");
+      } else {
+        // Dispatch to any new drivers that weren't in the original batch
+        const alreadyNotified = new Set(
+          Array.from(rideRejections.get(rideId) ?? [])
+        );
+        const newDrivers = remaining.filter(d => {
+          // Dispatch to drivers who haven't seen this ride yet (not in the rejection set and not the acceptor)
+          return !alreadyNotified.has(d.driverId);
+        });
+        if (newDrivers.length > 0) {
+          newDrivers.forEach(d => dispatchToDriver(io, ride, d));
+          logger.info({ rideId, count: newDrivers.length }, "Corrida redespachada para novos motoristas após rejeição");
+        }
+      }
     });
 
     socket.on("driver:arrived", ({ rideId }: { rideId: string }) => {
@@ -467,6 +509,7 @@ export function registerRideSocket(io: Server) {
       }
       if (pendingRides.has(rideId)) {
         pendingRides.delete(rideId);
+        rideRejections.delete(rideId);
         logger.info({ rideId }, "Corrida cancelada (pendente)");
       }
       const active = activeRides.get(rideId);
