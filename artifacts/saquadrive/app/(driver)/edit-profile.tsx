@@ -32,6 +32,7 @@ export default function DriverEditProfileScreen() {
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [vehicleModel, setVehicleModel] = useState(user?.vehicleModel ?? "");
   const [vehiclePlate, setVehiclePlate] = useState(user?.vehiclePlate ?? "");
+  const [vehicleType, setVehicleType] = useState<"car" | "moto">((user?.vehicleType as "car" | "moto") ?? "car");
   const [loading, setLoading] = useState(false);
   const [photoLoading, setPhotoLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -51,13 +52,9 @@ export default function DriverEditProfileScreen() {
         onPress: async () => {
           const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
+            allowsEditing: true, aspect: [1, 1], quality: 0.8,
           });
-          if (!result.canceled && result.assets[0]) {
-            await uploadPhoto(result.assets[0]);
-          }
+          if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0]);
         },
       },
       {
@@ -68,14 +65,8 @@ export default function DriverEditProfileScreen() {
             Alert.alert("Permissão necessária", "Precisamos de acesso à câmera.");
             return;
           }
-          const result = await ImagePicker.launchCameraAsync({
-            allowsEditing: true,
-            aspect: [1, 1],
-            quality: 0.8,
-          });
-          if (!result.canceled && result.assets[0]) {
-            await uploadPhoto(result.assets[0]);
-          }
+          const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
+          if (!result.canceled && result.assets[0]) await uploadPhoto(result.assets[0]);
         },
       },
       { text: "Cancelar", style: "cancel" },
@@ -88,18 +79,11 @@ export default function DriverEditProfileScreen() {
       const filename = asset.uri.split("/").pop() ?? "photo.jpg";
       const ext = filename.split(".").pop()?.toLowerCase() ?? "jpg";
       const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
       const formData = new FormData();
       formData.append("file", { uri: asset.uri, name: filename, type: mimeType } as unknown as Blob);
-
-      const res = await apiFetch("/api/documents/upload-profile-photo", {
-        method: "POST",
-        body: formData,
-      });
-
+      const res = await apiFetch("/api/documents/upload-profile-photo", { method: "POST", body: formData });
       const data = await res.json() as { url?: string; message?: string };
       if (!res.ok) throw new Error(data.message ?? "Erro ao enviar foto");
-
       await updateUserDocuments({ profilePhotoUrl: data.url });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
@@ -110,10 +94,7 @@ export default function DriverEditProfileScreen() {
   }
 
   async function handleSave() {
-    if (!name.trim()) {
-      Alert.alert("Atenção", "O nome não pode estar vazio.");
-      return;
-    }
+    if (!name.trim()) { Alert.alert("Atenção", "O nome não pode estar vazio."); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
@@ -122,6 +103,7 @@ export default function DriverEditProfileScreen() {
         phone: phone.trim(),
         vehicleModel: vehicleModel.trim() || undefined,
         vehiclePlate: vehiclePlate.trim().toUpperCase() || undefined,
+        vehicleType,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -213,6 +195,28 @@ export default function DriverEditProfileScreen() {
           <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>DADOS DO VEÍCULO</Text>
 
           <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: colors.mutedForeground }]}>Tipo de veículo</Text>
+            <View style={styles.typeRow}>
+              <TouchableOpacity
+                style={[styles.typeBtn, { borderColor: colors.border, backgroundColor: vehicleType === "car" ? "#00C4FF" : colors.background }]}
+                onPress={() => setVehicleType("car")}
+                activeOpacity={0.8}
+              >
+                <Feather name="truck" size={16} color={vehicleType === "car" ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.typeBtnText, { color: vehicleType === "car" ? "#fff" : colors.mutedForeground }]}>Carro</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeBtn, { borderColor: colors.border, backgroundColor: vehicleType === "moto" ? "#00C4FF" : colors.background }]}
+                onPress={() => setVehicleType("moto")}
+                activeOpacity={0.8}
+              >
+                <Feather name="zap" size={16} color={vehicleType === "moto" ? "#fff" : colors.mutedForeground} />
+                <Text style={[styles.typeBtnText, { color: vehicleType === "moto" ? "#fff" : colors.mutedForeground }]}>Moto</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Modelo</Text>
             <TextInput
               style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
@@ -252,10 +256,7 @@ export default function DriverEditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1,
-  },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1 },
   backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   content: { padding: 16, gap: 16 },
@@ -264,29 +265,18 @@ const styles = StyleSheet.create({
   avatar: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
   avatarImage: { width: 88, height: 88, borderRadius: 44 },
   avatarText: { fontSize: 30, fontFamily: "Inter_700Bold" },
-  avatarOverlay: {
-    position: "absolute", top: 0, left: 0, width: 88, height: 88,
-    borderRadius: 44, alignItems: "center", justifyContent: "center",
-  },
-  cameraBtn: {
-    position: "absolute", bottom: 0, right: 0,
-    width: 28, height: 28, borderRadius: 14,
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: "#fff",
-  },
+  avatarOverlay: { position: "absolute", top: 0, left: 0, width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
+  cameraBtn: { position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#fff" },
   photoHint: { fontSize: 12, fontFamily: "Inter_400Regular" },
   section: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 16 },
   sectionTitle: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.8, textTransform: "uppercase" },
   fieldGroup: { gap: 6 },
   label: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  input: {
-    height: 48, borderRadius: 12, borderWidth: 1,
-    paddingHorizontal: 14, fontSize: 15, fontFamily: "Inter_400Regular",
-  },
+  input: { height: 48, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, fontSize: 15, fontFamily: "Inter_400Regular" },
   hint: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  saveBtn: {
-    height: 52, borderRadius: 14,
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-  },
+  typeRow: { flexDirection: "row", gap: 10 },
+  typeBtn: { flex: 1, height: 48, borderRadius: 12, borderWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  typeBtnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  saveBtn: { height: 52, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   saveBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
 });
