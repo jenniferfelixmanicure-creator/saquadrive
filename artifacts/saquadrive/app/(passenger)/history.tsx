@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { API_URL } from "@/constants/api";
 
 type ApiRide = {
   id: string;
@@ -134,7 +133,7 @@ function RideItem({ item, colors }: { item: ApiRide; colors: ReturnType<typeof u
 }
 
 export default function HistoryScreen() {
-  const { token } = useAuth();
+  const { apiFetch } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -145,17 +144,16 @@ export default function HistoryScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const res = await fetch(`${API_URL}/api/rides/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 30000)
+      );
+      const res = await Promise.race([
+        apiFetch("/api/rides/history"),
+        timeoutPromise,
+      ]);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json() as ApiRide[];
       setRides(data);
@@ -164,7 +162,7 @@ export default function HistoryScreen() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [apiFetch]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 

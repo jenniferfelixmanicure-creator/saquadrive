@@ -14,7 +14,7 @@ router.get("/admin/stats", async (req: AuthRequest, res) => {
     const [totalRides] = await db.select({ count: sql<number>`count(*)::int` }).from(ridesTable);
     const [pendingDrivers] = await db.select({ count: sql<number>`count(*)::int` })
       .from(usersTable).where(
-        sql`${usersTable.role} = 'driver' AND (${usersTable.rgStatus} = 'pending' OR ${usersTable.cnhStatus} = 'pending' OR ${usersTable.crlvStatus} = 'pending')`
+        sql`${usersTable.role} = 'driver' AND ${usersTable.isApproved} = false`
       );
     const [revenue] = await db.select({
       total: sql<number>`coalesce(sum(${ridesTable.price}), 0)`,
@@ -111,7 +111,7 @@ router.post("/admin/drivers/:id/reject", async (req: AuthRequest, res) => {
     const id = Number(req.params.id);
     const { reason } = req.body as { reason?: string };
     const [updated] = await db.update(usersTable)
-      .set({ isApproved: false, rgStatus: "rejected" })
+      .set({ isApproved: false, rgStatus: "rejected", cnhStatus: "rejected", crlvStatus: "rejected" })
       .where(eq(usersTable.id, id)).returning({ id: usersTable.id, isApproved: usersTable.isApproved });
     req.log.info({ id, reason }, "Driver rejected");
     res.json({ ...updated, id: String(updated.id) });

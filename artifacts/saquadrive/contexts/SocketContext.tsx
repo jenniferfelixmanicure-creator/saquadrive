@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
   import { API_URL, SOCKET_PATH } from "@/constants/api";
   import { useAuth } from "./AuthContext";
 
@@ -11,11 +11,22 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
   export function SocketProvider({ children }: { children: React.ReactNode }) {
     const { token } = useAuth();
+    const tokenRef = useRef<string | null>(token);
     const [socket, setSocket] = useState<unknown | null>(null);
     const [connected, setConnected] = useState(false);
 
+    tokenRef.current = token;
+
+    const isLoggedIn = !!token;
+
     useEffect(() => {
-      let s: { disconnect?: () => void; on?: (e: string, cb: (...a: unknown[]) => void) => void } | null = null;
+      let s: { disconnect?: () => void; on?: (e: string, cb: (...a: unknown[]) => void) => void; auth?: Record<string, string> } | null = null;
+
+      if (!isLoggedIn) {
+        setSocket(null);
+        setConnected(false);
+        return;
+      }
 
       try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -25,7 +36,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
           transports: ["websocket", "polling"],
           reconnectionAttempts: 10,
           reconnectionDelay: 3000,
-          auth: token ? { token } : undefined,
+          auth: { token: tokenRef.current ?? "" },
           timeout: 10000,
         });
 
@@ -45,7 +56,13 @@ import React, { createContext, useContext, useEffect, useState } from "react";
         setSocket(null);
         setConnected(false);
       };
-    }, [token]);
+    }, [isLoggedIn]);
+
+    useEffect(() => {
+      if (socket && token) {
+        (socket as { auth: Record<string, string> }).auth = { token };
+      }
+    }, [socket, token]);
 
     return (
       <SocketContext.Provider value={{ socket, connected }}>

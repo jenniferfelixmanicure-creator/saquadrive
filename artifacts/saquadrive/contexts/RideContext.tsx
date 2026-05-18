@@ -350,9 +350,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   async function rateDriver(stars: number) {
     if (!currentRide) return;
-    try {
-      if (currentRide.driver?.id) {
-        await apiFetch("/api/ratings", {
+    if (currentRide.driver?.id) {
+      try {
+        const res = await apiFetch("/api/ratings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -362,8 +362,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
             role: "passenger",
           }),
         });
+        if (!res.ok && res.status !== 409) {
+          Alert.alert("Aviso", "Não foi possível enviar sua avaliação. Tente novamente mais tarde.");
+        }
+      } catch {
+        Alert.alert("Aviso", "Não foi possível enviar sua avaliação. Tente novamente mais tarde.");
       }
-    } catch {
     }
     const rated = { ...currentRide, rating: stars, status: "completed" as RideStatus };
     const newHistory = [rated, ...history].slice(0, 50);

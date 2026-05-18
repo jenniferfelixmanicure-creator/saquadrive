@@ -17,6 +17,13 @@ router.post("/ratings", authenticate, async (req: AuthRequest, res) => {
     if (stars < 1 || stars > 5) {
       res.status(400).json({ message: "Avaliação deve ser entre 1 e 5" }); return;
     }
+    const [existing] = await db.select({ id: ratingsTable.id })
+      .from(ratingsTable)
+      .where(sql`${ratingsTable.rideId} = ${rideId} AND ${ratingsTable.raterId} = ${req.user!.userId}`)
+      .limit(1);
+    if (existing) {
+      res.status(409).json({ message: "Você já avaliou esta corrida" }); return;
+    }
     await db.insert(ratingsTable).values({
       rideId, ratedId, raterId: req.user!.userId, stars, role,
     });

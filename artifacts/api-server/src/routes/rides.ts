@@ -8,10 +8,56 @@ const router = Router();
 
 router.get("/rides/history", authenticate, async (req: AuthRequest, res) => {
   try {
-    const rides = await db.select().from(ridesTable)
+    const rows = await db.select({
+      id: ridesTable.id,
+      originAddress: ridesTable.originAddress,
+      originLat: ridesTable.originLat,
+      originLng: ridesTable.originLng,
+      destAddress: ridesTable.destAddress,
+      destLat: ridesTable.destLat,
+      destLng: ridesTable.destLng,
+      rideType: ridesTable.rideType,
+      price: ridesTable.price,
+      status: ridesTable.status,
+      distance: ridesTable.distance,
+      duration: ridesTable.duration,
+      createdAt: ridesTable.createdAt,
+      completedAt: ridesTable.completedAt,
+      driverName: usersTable.name,
+      driverRating: usersTable.driverRating,
+      vehicleModel: usersTable.vehicleModel,
+      vehiclePlate: usersTable.vehiclePlate,
+      vehicleColor: usersTable.vehicleColor,
+    }).from(ridesTable)
+      .leftJoin(usersTable, eq(ridesTable.driverId, usersTable.id))
       .where(eq(ridesTable.passengerId, req.user!.userId))
       .orderBy(desc(ridesTable.createdAt))
       .limit(50);
+
+    const rides = rows.map(r => ({
+      id: r.id,
+      originAddress: r.originAddress,
+      originLat: r.originLat,
+      originLng: r.originLng,
+      destAddress: r.destAddress,
+      destLat: r.destLat,
+      destLng: r.destLng,
+      rideType: r.rideType,
+      price: r.price,
+      status: r.status,
+      distance: r.distance,
+      duration: r.duration,
+      createdAt: r.createdAt,
+      completedAt: r.completedAt,
+      driver: r.driverName ? {
+        name: r.driverName,
+        rating: r.driverRating,
+        vehicleModel: r.vehicleModel,
+        vehiclePlate: r.vehiclePlate,
+        vehicleColor: r.vehicleColor ?? null,
+      } : null,
+    }));
+
     res.json(rides);
   } catch (err) {
     req.log.error(err);

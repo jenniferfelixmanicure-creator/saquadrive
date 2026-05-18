@@ -122,13 +122,17 @@ export default function DriverProfileScreen() {
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
               <Feather name="navigation" size={14} color={colors.accent} />
-              <Text style={[styles.statNum, { color: colors.foreground }]}>112</Text>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>
+                {user?.totalRides ?? 0}
+              </Text>
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Corridas</Text>
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.statItem}>
               <Feather name="shield" size={14} color={colors.success} />
-              <Text style={[styles.statNum, { color: colors.foreground }]}>98%</Text>
+              <Text style={[styles.statNum, { color: colors.foreground }]}>
+                {user?.driverRating ? `${Math.round(user.driverRating * 20)}%` : "100%"}
+              </Text>
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Aprovação</Text>
             </View>
           </View>
