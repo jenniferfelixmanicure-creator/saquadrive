@@ -500,9 +500,9 @@ export default function PassengerHomeScreen() {
               {/* Preço estimado */}
               <View style={[styles.findingPriceRow, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "33" }]}>
                 <Feather name="dollar-sign" size={14} color={colors.primary} />
-                <Text style={[styles.findingPriceLabel, { color: colors.mutedForeground }]}>Valor estimado</Text>
+                <Text style={[styles.findingPriceLabel, { color: colors.mutedForeground }]}>Valor da corrida</Text>
                 <Text style={[styles.findingPriceValue, { color: colors.primary }]}>
-                  R$ {priceInfo.total.toFixed(2)}
+                  R$ {(currentRide?.price ?? priceInfo.total).toFixed(2)}
                 </Text>
               </View>
 
