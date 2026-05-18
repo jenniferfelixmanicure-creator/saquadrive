@@ -35,7 +35,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
     mode: AppMode | null;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (name: string, email: string, phone: string, password: string) => Promise<void>;
+    register: (name: string, email: string, phone: string, password: string, role?: string) => Promise<void>;
     logout: () => Promise<void>;
     setMode: (mode: AppMode) => void;
     updateUser: (updates: Partial<User>) => Promise<void>;
@@ -283,11 +283,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
       setToken(data.token);
     }
 
-    async function register(name: string, email: string, phone: string, password: string) {
+    async function register(name: string, email: string, phone: string, password: string, role = "passenger") {
       const res = await fetchWithTimeout(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, phone, password }),
+        body: JSON.stringify({ name, email, phone, password, role }),
       }, 15000);
       const data = await res.json() as AuthResponse & { message?: string };
       if (!res.ok) throw new Error(data.message ?? "Erro desconhecido");
