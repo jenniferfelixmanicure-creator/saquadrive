@@ -92,9 +92,10 @@ export default function PassengerProfileScreen() {
     ]);
   }
 
-  function handleSwitchMode() {
+  async function handleSwitchMode() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.replace("/");
+    await logout();
+    router.replace("/(auth)/login");
   }
 
   return (
