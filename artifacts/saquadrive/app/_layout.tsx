@@ -48,20 +48,18 @@ export default function RootLayout() {
     ...Feather.font,
   });
 
+  // Esconde a splash nativa IMEDIATAMENTE ao montar o componente.
+  // Assim o Android 12 não fica segurando o ícone pequeno na tela —
+  // o AppSplash (fullscreen) toma o lugar instantaneamente.
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      // Pequeno delay para garantir que o JS renderizou o primeiro frame
-      setTimeout(() => {
-        SplashScreen.hideAsync().catch(() => {});
-      }, 500);
-    }
-  }, [fontsLoaded, fontError]);
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
       registerForPushNotificationsAsync();
     } catch (e) {}
-    
+
     if (Platform.OS === "android") {
       try {
         NavigationBar.setVisibilityAsync("hidden");
