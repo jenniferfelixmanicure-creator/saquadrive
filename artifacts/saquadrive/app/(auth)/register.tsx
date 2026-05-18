@@ -42,8 +42,8 @@ export default function RegisterScreen() {
     setError("");
     setLoading(true);
     try {
-      await register(name.trim(), email.trim(), phone.trim(), password);
       const mode = params.mode ?? "passenger";
+      await register(name.trim(), email.trim(), phone.trim(), password, mode);
       setMode(mode);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (mode === "driver") {
