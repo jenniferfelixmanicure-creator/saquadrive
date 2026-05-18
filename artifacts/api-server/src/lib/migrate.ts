@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS "rides" (
   "dest_address" text NOT NULL,
   "dest_lat" real NOT NULL,
   "dest_lng" real NOT NULL,
-  "status" text NOT NULL DEFAULT 'completed',
+  "status" text NOT NULL DEFAULT 'finding',
   "ride_type" text NOT NULL,
   "price" real NOT NULL,
   "distance" text,
@@ -70,6 +70,37 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "passenger_rating" real NOT NULL DE
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "total_rides" integer NOT NULL DEFAULT 0;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_active" boolean NOT NULL DEFAULT false;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_expires_at" timestamp;
+
+-- Recalcular total_rides de cada motorista baseado nas corridas concluidas reais
+-- Isso corrige qualquer valor incorreto de dados anteriores
+UPDATE "users"
+SET "total_rides" = COALESCE((
+  SELECT COUNT(*)::int
+  FROM "rides"
+  WHERE "rides"."driver_id" = "users"."id"
+    AND "rides"."status" = 'completed'
+), 0)
+WHERE "role" = 'driver';
+
+-- Recalcular nota media dos motoristas com base nas avaliacoes reais
+UPDATE "users"
+SET "driver_rating" = COALESCE((
+  SELECT ROUND(AVG(stars)::numeric, 2)
+  FROM "ratings"
+  WHERE "ratings"."rated_id" = "users"."id"
+    AND "ratings"."role" = 'passenger'
+), 5.0)
+WHERE "role" = 'driver';
+
+-- Recalcular nota media dos passageiros com base nas avaliacoes reais
+UPDATE "users"
+SET "passenger_rating" = COALESCE((
+  SELECT ROUND(AVG(stars)::numeric, 2)
+  FROM "ratings"
+  WHERE "ratings"."rated_id" = "users"."id"
+    AND "ratings"."role" = 'driver'
+), 5.0)
+WHERE "role" = 'passenger' OR "role" = 'driver';
 `;
 
 export async function runMigrations(logger: Logger): Promise<void> {
@@ -82,4 +113,3 @@ export async function runMigrations(logger: Logger): Promise<void> {
     client.release();
   }
 }
-
