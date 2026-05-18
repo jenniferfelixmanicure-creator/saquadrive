@@ -37,7 +37,7 @@ router.post("/auth/register", async (req, res) => {
     });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+    const errMsg = err instanceof Error ? err.message : String(err); res.status(500).json({ message: "Erro interno", debug: errMsg });
   }
 });
 
@@ -68,7 +68,7 @@ router.post("/auth/login", async (req, res) => {
     });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+    const errMsg = err instanceof Error ? err.message : String(err); res.status(500).json({ message: "Erro interno", debug: errMsg });
   }
 });
 
@@ -91,7 +91,7 @@ router.post("/auth/refresh", async (req, res) => {
     res.json({ token: newToken, refreshToken: newRefresh });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+    const errMsg = err instanceof Error ? err.message : String(err); res.status(500).json({ message: "Erro interno", debug: errMsg });
   }
 });
 
@@ -111,7 +111,7 @@ router.post("/auth/change-password", authenticate, async (req: AuthRequest, res)
     res.json({ message: "Senha alterada com sucesso" });
   } catch (err) {
     req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+    const errMsg = err instanceof Error ? err.message : String(err); res.status(500).json({ message: "Erro interno", debug: errMsg });
   }
 });
 
