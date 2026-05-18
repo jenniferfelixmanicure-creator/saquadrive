@@ -45,4 +45,22 @@ router.put("/users/me", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// ── Registrar token Expo Push ──────────────────────────────────────────────────
+
+router.post("/users/me/expo-token", authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { expoPushToken } = req.body as { expoPushToken?: string };
+    if (!expoPushToken?.trim()) {
+      res.status(400).json({ message: "expoPushToken é obrigatório" }); return;
+    }
+    await db.update(usersTable)
+      .set({ expoPushToken: expoPushToken.trim() })
+      .where(eq(usersTable.id, req.user!.userId));
+    res.json({ message: "Token registrado com sucesso" });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
 export default router;
