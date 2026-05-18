@@ -133,8 +133,29 @@ export function initSockets(io: Server, logger: Logger) {
       }
       const ride = { ...data, passengerSocketId: socket.id, notifiedDrivers: [] as string[] };
       pendingRides.set(data.rideId, ride);
+      let passengerNameFromDb = data.passengerName;
+      let passengerPhotoUrl: string | null = null;
+      let passengerRating = 5.0;
+      let passengerTotalRides = 0;
+      try {
+        const [passenger] = await db.select({
+          name: usersTable.name,
+          profilePhotoUrl: usersTable.profilePhotoUrl,
+          passengerRating: usersTable.passengerRating,
+          totalRides: usersTable.totalRides,
+        }).from(usersTable).where(eq(usersTable.id, parseInt(data.passengerId))).limit(1);
+        if (passenger) {
+          passengerNameFromDb = passenger.name;
+          passengerPhotoUrl = passenger.profilePhotoUrl ?? null;
+          passengerRating = passenger.passengerRating;
+          passengerTotalRides = passenger.totalRides;
+        }
+      } catch (err) {
+        logger.warn(err, "Failed to fetch passenger details from DB");
+      }
       const driverData = {
-        rideId: data.rideId, passengerId: data.passengerId, passengerName: data.passengerName,
+        rideId: data.rideId, passengerId: data.passengerId, passengerName: passengerNameFromDb,
+        passengerPhotoUrl, passengerRating, passengerTotalRides,
         origin: data.origin, destination: data.destination, rideType: data.rideType,
         price: data.price, distance: data.distance, distanceKm: data.distanceKm, duration: data.duration,
       };
