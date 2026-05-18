@@ -10,13 +10,14 @@ const router = Router();
 
 router.post("/auth/register", async (req, res) => {
   try {
-    const { name, email, phone, password } = req.body as {
-      name: string; email: string; phone: string; password: string;
+    const { name, email, phone, password, role: rawRole } = req.body as {
+      name: string; email: string; phone: string; password: string; role?: string;
     };
     if (!name || !email || !phone || !password) {
       res.status(400).json({ message: "Todos os campos são obrigatórios" });
       return;
     }
+    const role = rawRole === "driver" ? "driver" : "passenger";
     const existing = await db.select({ id: usersTable.id })
       .from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
     if (existing.length > 0) {
@@ -25,7 +26,7 @@ router.post("/auth/register", async (req, res) => {
     }
     const passwordHash = await bcrypt.hash(password, 12);
     const [user] = await db.insert(usersTable).values({
-      name, email: email.toLowerCase(), phone, passwordHash, role: "passenger", isApproved: false,
+      name, email: email.toLowerCase(), phone, passwordHash, role, isApproved: false,
     }).returning();
     const token = signAccessToken({ userId: user.id, role: user.role });
     const { token: refreshToken, expiresAt } = signRefreshToken();
