@@ -86,13 +86,21 @@ export default function EarningsScreen() {
   const fetchRides = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const res = await apiFetch("/api/rides/driver/history", {});
+      const res = await apiFetch("/api/rides/driver/history", { signal: controller.signal });
+      clearTimeout(timer);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json() as ApiRide[];
       setAllRides(data);
-    } catch {
-      setError("Não foi possível carregar os ganhos. Verifique sua conexão.");
+    } catch (e: unknown) {
+      clearTimeout(timer);
+      if (e instanceof Error && e.name === "AbortError") {
+        setError("Servidor demorou a responder. Tente novamente.");
+      } else {
+        setError("Não foi possível carregar os ganhos. Verifique sua conexão.");
+      }
     } finally {
       setLoading(false);
     }
