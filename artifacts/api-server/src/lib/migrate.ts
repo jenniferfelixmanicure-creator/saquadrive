@@ -100,6 +100,15 @@ ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "suspended" boolean NOT NULL DEFAUL
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "cancellation_fee_owed" real NOT NULL DEFAULT 0;
 ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "expo_push_token" text;
 
+-- Renomear dest_* → destination_* (idempotente)
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "destination_address" text;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "destination_lat" real;
+ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "destination_lng" real;
+
+UPDATE "rides" SET "destination_address" = "dest_address" WHERE "destination_address" IS NULL AND "dest_address" IS NOT NULL;
+UPDATE "rides" SET "destination_lat" = "dest_lat" WHERE "destination_lat" IS NULL AND "dest_lat" IS NOT NULL;
+UPDATE "rides" SET "destination_lng" = "dest_lng" WHERE "destination_lng" IS NULL AND "dest_lng" IS NOT NULL;
+
 ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "arrived_at" timestamp;
 ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "cancelled_at" timestamp;
 ALTER TABLE "rides" ADD COLUMN IF NOT EXISTS "cancelled_late" boolean NOT NULL DEFAULT false;
