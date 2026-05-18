@@ -440,6 +440,19 @@ export default function DriverHomeScreen() {
 
             {ridePhase === "picking_up" && (
               <>
+                {(() => {
+                  const pickupLoc = activeRide ? parseLocation(activeRide.origin) : undefined;
+                  return pickupLoc ? (
+                    <TouchableOpacity
+                      style={[styles.navBtn, { backgroundColor: colors.accent + "22", borderColor: colors.accent + "55" }]}
+                      onPress={() => openNavigation(pickupLoc.lat, pickupLoc.lng, getAddressText(activeRide!.origin))}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="navigation" size={16} color={colors.accent} />
+                      <Text style={[styles.navBtnText, { color: colors.accent }]}>Navegar até o passageiro</Text>
+                    </TouchableOpacity>
+                  ) : null;
+                })()}
                 <TouchableOpacity style={[styles.arrivedBtn, { backgroundColor: colors.primary }]} onPress={handleArrived} activeOpacity={0.85}>
                   <Feather name="map-pin" size={18} color="#fff" />
                   <Text style={styles.finishText}>Cheguei ao local</Text>
@@ -603,6 +616,8 @@ const styles = StyleSheet.create({
   arrivedBtn: { height: 50, borderRadius: 14, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   cancelRideBtn: { height: 42, borderRadius: 12, borderWidth: 1, marginBottom: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   cancelRideBtnText: { fontSize: 14, fontFamily: "Inter_500Medium" },
+  navBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", height: 46, borderRadius: 12, borderWidth: 1, gap: 8, marginBottom: 10 },
+  navBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   pinOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.75)", alignItems: "center", justifyContent: "center" },
   pinModal: { width: "86%", borderRadius: 24, borderWidth: 1, padding: 28, gap: 14, alignItems: "center" },
   pinIconBox: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 4 },
