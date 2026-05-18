@@ -228,7 +228,7 @@ export function registerRideSocket(io: Server) {
           id: data.rideId,
           passengerId: parseInt(data.passengerId) || null,
           originAddress: origin.address, originLat: origin.lat, originLng: origin.lng,
-          destAddress: destination.address, destLat: destination.lat, destLng: destination.lng,
+          destinationAddress: destination.address, destinationLat: destination.lat, destinationLng: destination.lng,
           rideType: data.rideType as "moto" | "basico" | "intermediario" | "vip",
           price: serverPrice, distance: data.distance, duration: data.duration,
           status: "finding", pin: ridePin,
