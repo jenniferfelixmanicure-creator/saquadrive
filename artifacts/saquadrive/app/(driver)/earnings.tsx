@@ -14,8 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { API_URL } from "@/constants/api";
-
 type Period = "hoje" | "semana" | "mes";
 
 type ApiRide = {
@@ -74,7 +72,7 @@ function toDisplay(ride: ApiRide): DisplayRide {
 }
 
 export default function EarningsScreen() {
-  const { token } = useAuth();
+  const { apiFetch } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [period, setPeriod] = useState<Period>("hoje");
@@ -86,13 +84,10 @@ export default function EarningsScreen() {
   const botPad = Platform.OS === "web" ? 84 : insets.bottom + 60;
 
   const fetchRides = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/rides/driver/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch("/api/rides/driver/history", {});
       if (!res.ok) throw new Error(`Erro ${res.status}`);
       const data = await res.json() as ApiRide[];
       setAllRides(data);
@@ -101,7 +96,7 @@ export default function EarningsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [apiFetch]);
 
   useEffect(() => { fetchRides(); }, [fetchRides]);
 
