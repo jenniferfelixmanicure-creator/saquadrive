@@ -14,7 +14,8 @@ router.use(authRouter);
 router.use(usersRouter);
 router.use(ridesRouter);
 router.use(ratingsRouter);
-router.use(adminRouter);
 router.use(documentsRouter);
+router.use(adminRouter);
 
 export default router;
+
