@@ -125,7 +125,7 @@ export default function DriverHistoryScreen() {
     setError(null);
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
+      const timeout = setTimeout(() => controller.abort(), 30000);
       const res = await fetch(`${API_URL}/api/rides/driver/history`, {
         headers: { Authorization: `Bearer ${token}` },
         signal: controller.signal,
