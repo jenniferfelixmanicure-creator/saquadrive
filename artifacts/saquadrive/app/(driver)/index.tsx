@@ -639,7 +639,7 @@ export default function DriverHomeScreen() {
                     </Text>
                   </View>
                   <Text style={[styles.price, { color: colors.primary }]}>
-                    R$ {item.price.toFixed(2)}
+                    R$ {(item.price ?? 0).toFixed(2)}
                   </Text>
                 </View>
                 <View style={[styles.requestRoute, { borderTopColor: colors.border }]}>
@@ -700,11 +700,11 @@ export default function DriverHomeScreen() {
 
             <View style={styles.activeRideRow}>
               <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-                <Text style={styles.avatarText}>{activeRide.passenger[0]}</Text>
+                <Text style={styles.avatarText}>{(activeRide.passenger ?? 'P')[0]}</Text>
               </View>
               <View style={styles.requestInfo}>
                 <Text style={[styles.passengerName, { color: colors.foreground }]}>
-                  {activeRide.passenger}
+                  {activeRide.passenger ?? "Passageiro"}
                 </Text>
                 <Text style={[styles.requestMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
                   {ridePhase === "picking_up"
@@ -713,7 +713,7 @@ export default function DriverHomeScreen() {
                 </Text>
               </View>
               <Text style={[styles.price, { color: colors.primary }]}>
-                R$ {activeRide.price.toFixed(2)}
+                R$ {(activeRide.price ?? 0).toFixed(2)}
               </Text>
             </View>
 
