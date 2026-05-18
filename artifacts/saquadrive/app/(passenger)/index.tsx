@@ -310,8 +310,43 @@ export default function PassengerHomeScreen() {
             <Text style={styles.suspendedBannerText}>Conta suspensa — toque para ver detalhes</Text>
           </TouchableOpacity>
         )}
+
+        {/* Sugestões de endereço aparecem abaixo da barra de busca, acima do teclado */}
+        {phase === "typing" && (
+          <View style={[styles.suggestionsPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {searchResults.length > 0 ? (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.address}
+                keyboardShouldPersistTaps="always"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.destRow, { borderBottomColor: colors.border }]}
+                    onPress={() => handleDestinationSelect(item)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.destIcon, { backgroundColor: colors.muted }]}>
+                      <Feather name="map-pin" size={16} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.destText, { color: colors.foreground }]} numberOfLines={1}>
+                      {item.address}
+                    </Text>
+                    <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : searchText.trim().length > 0 ? (
+              <View style={styles.suggestionsEmpty}>
+                <Feather name="search" size={20} color={colors.mutedForeground} />
+                <Text style={[styles.suggestionsEmptyText, { color: colors.mutedForeground }]}>Buscando endereços...</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
       </View>
 
+      {phase !== "typing" && (
       <View style={[styles.bottomSheet, { backgroundColor: colors.card, borderColor: colors.border, paddingBottom: botPad + 16 }]}>
 
         {phase === "idle" && !user?.isApproved && (
@@ -330,29 +365,6 @@ export default function PassengerHomeScreen() {
             <Feather name="map-pin" size={32} color={colors.mutedForeground} />
             <Text style={[styles.emptyStateTitle, { color: colors.foreground }]}>Para onde vamos?</Text>
             <Text style={[styles.emptyStateDesc, { color: colors.mutedForeground }]}>Busque seu destino acima ou toque no mapa</Text>
-          </View>
-        )}
-
-        {phase === "typing" && (
-          <View>
-            {searchResults.length > 0 ? (
-              <>
-                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Resultados</Text>
-                <FlatList data={searchResults} keyExtractor={(item) => item.address} scrollEnabled={false}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity style={[styles.destRow, { borderBottomColor: colors.border }]} onPress={() => handleDestinationSelect(item)} activeOpacity={0.7}>
-                      <View style={[styles.destIcon, { backgroundColor: colors.muted }]}><Feather name="map-pin" size={16} color={colors.primary} /></View>
-                      <Text style={[styles.destText, { color: colors.foreground }]} numberOfLines={1}>{item.address}</Text>
-                      <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  )} showsVerticalScrollIndicator={false} />
-              </>
-            ) : (
-              <View style={styles.emptyState}>
-                <Feather name="search" size={28} color={colors.mutedForeground} />
-                <Text style={[styles.emptyStateDesc, { color: colors.mutedForeground }]}>Buscando endereços...</Text>
-              </View>
-            )}
           </View>
         )}
 
@@ -592,6 +604,7 @@ export default function PassengerHomeScreen() {
           </View>
         )}
       </View>
+      )}
     </View>
   );
 }
@@ -658,6 +671,9 @@ const styles = StyleSheet.create({
   cancelRideText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   ratingIcon: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center" },
   starsRow: { flexDirection: "row", gap: 12, marginTop: 8 },
+  suggestionsPanel: { borderRadius: 16, borderWidth: 1, marginTop: 4, maxHeight: 280, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 8 },
+  suggestionsEmpty: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 14 },
+  suggestionsEmptyText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   emptyState: { alignItems: "center", paddingVertical: 24, gap: 10 },
   emptyStateTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   emptyStateDesc: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 20 },
