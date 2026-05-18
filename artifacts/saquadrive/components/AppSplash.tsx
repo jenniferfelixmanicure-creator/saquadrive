@@ -1,66 +1,158 @@
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useRef } from "react";
-import { Animated, Easing, StyleSheet, Text, View } from "react-native";
+import {
+  Animated,
+  Dimensions,
+  Easing,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+const { width } = Dimensions.get("window");
+const BAR_WIDTH = width * 0.55;
 
 export default function AppSplash() {
   const logoOpacity = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.85)).current;
-  const sloganOpacity = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.82)).current;
+  const taglineOpacity = useRef(new Animated.Value(0)).current;
+  const taglineY = useRef(new Animated.Value(10)).current;
+  const barProgress = useRef(new Animated.Value(0)).current;
   const dot1 = useRef(new Animated.Value(0.3)).current;
   const dot2 = useRef(new Animated.Value(0.3)).current;
   const dot3 = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
-    // Logo entra com fade + scale
     Animated.parallel([
       Animated.timing(logoOpacity, {
-        toValue: 1, duration: 600, useNativeDriver: true,
+        toValue: 1,
+        duration: 650,
+        useNativeDriver: true,
         easing: Easing.out(Easing.ease),
       }),
       Animated.timing(logoScale, {
-        toValue: 1, duration: 600, useNativeDriver: true,
-        easing: Easing.out(Easing.back(1.2)),
+        toValue: 1,
+        duration: 650,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.back(1.1)),
       }),
     ]).start();
 
-    // Slogan aparece depois do logo
     Animated.sequence([
-      Animated.delay(400),
-      Animated.timing(sloganOpacity, {
-        toValue: 1, duration: 500, useNativeDriver: true,
-        easing: Easing.out(Easing.ease),
-      }),
+      Animated.delay(450),
+      Animated.parallel([
+        Animated.timing(taglineOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.timing(taglineY, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+      ]),
     ]).start();
 
-    // Dots de loading pulsando em cascata
-    const pulse = (anim: Animated.Value, delay: number) =>
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(barProgress, {
+          toValue: 1,
+          duration: 1400,
+          useNativeDriver: false,
+          easing: Easing.inOut(Easing.ease),
+        }),
+        Animated.timing(barProgress, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: false,
+        }),
+      ])
+    ).start();
+
+    const pulseDot = (anim: Animated.Value, delay: number) =>
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1, duration: 400, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 0.3, duration: 400, useNativeDriver: true }),
-          Animated.delay(400),
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 380,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.ease),
+          }),
+          Animated.timing(anim, {
+            toValue: 0.3,
+            duration: 380,
+            useNativeDriver: true,
+            easing: Easing.in(Easing.ease),
+          }),
         ])
       );
-    pulse(dot1, 0).start();
-    pulse(dot2, 200).start();
-    pulse(dot3, 400).start();
+
+    pulseDot(dot1, 0).start();
+    pulseDot(dot2, 180).start();
+    pulseDot(dot3, 360).start();
   }, []);
+
+  const barWidth = barProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, BAR_WIDTH],
+  });
 
   return (
     <View style={styles.container}>
+      <LinearGradient
+        colors={["#0A0A12", "#0D0D1A", "#0D0D0D"]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      <View style={styles.glow} />
+
       <View style={styles.center}>
-        <Animated.View style={{ opacity: logoOpacity, transform: [{ scale: logoScale }] }}>
-          <Text style={styles.logo}>ZeroRisco</Text>
+        <Animated.View
+          style={[
+            styles.logoWrapper,
+            { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+          ]}
+        >
+          <Image
+            source={require("../assets/images/zerorisco_logo_futuristic.png")}
+            style={styles.logoImage}
+            contentFit="contain"
+          />
         </Animated.View>
-        <Animated.View style={{ opacity: sloganOpacity }}>
-          <Text style={styles.slogan}>Sua segurança em primeiro lugar</Text>
+
+        <Animated.View
+          style={[
+            styles.textGroup,
+            {
+              opacity: taglineOpacity,
+              transform: [{ translateY: taglineY }],
+            },
+          ]}
+        >
+          <Text style={styles.brandName}>ZeroRisco</Text>
+          <View style={styles.divider} />
+          <Text style={styles.tagline}>Sua segurança em primeiro lugar</Text>
         </Animated.View>
       </View>
 
-      <View style={styles.dotsRow}>
-        {[dot1, dot2, dot3].map((d, i) => (
-          <Animated.View key={i} style={[styles.dot, { opacity: d }]} />
-        ))}
+      <View style={styles.bottom}>
+        <View style={styles.dotsRow}>
+          {[dot1, dot2, dot3].map((d, i) => (
+            <Animated.View key={i} style={[styles.dot, { opacity: d }]} />
+          ))}
+        </View>
+
+        <View style={styles.barTrack}>
+          <Animated.View style={[styles.barFill, { width: barWidth }]} />
+        </View>
+
+        <Text style={styles.loadingLabel}>Carregando...</Text>
       </View>
     </View>
   );
@@ -73,33 +165,103 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  center: {
-    alignItems: "center",
-    gap: 12,
+
+  glow: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: "rgba(0,196,255,0.05)",
+    top: "28%",
+    alignSelf: "center",
   },
-  logo: {
-    fontSize: 48,
+
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 26,
+  },
+
+  logoWrapper: {
+    alignItems: "center",
+    elevation: Platform.OS === "android" ? 8 : 0,
+  },
+
+  logoImage: {
+    width: 220,
+    height: 110,
+  },
+
+  textGroup: {
+    alignItems: "center",
+    gap: 10,
+  },
+
+  brandName: {
+    fontSize: 36,
     fontWeight: "900",
-    color: "#00C4FF",
+    color: "#FFFFFF",
     letterSpacing: -1,
   },
-  slogan: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.55)",
-    letterSpacing: 0.3,
-    textAlign: "center",
+
+  divider: {
+    width: 38,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "#00C4FF",
+    opacity: 0.75,
   },
-  dotsRow: {
+
+  tagline: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.50)",
+    letterSpacing: 0.4,
+    textAlign: "center",
+    fontWeight: "400",
+  },
+
+  bottom: {
     position: "absolute",
-    bottom: 80,
+    bottom: 72,
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    paddingHorizontal: 48,
+  },
+
+  dotsRow: {
     flexDirection: "row",
     gap: 10,
     alignItems: "center",
   },
+
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: "#00C4FF",
+  },
+
+  barTrack: {
+    width: BAR_WIDTH,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+  },
+
+  barFill: {
+    height: "100%",
+    borderRadius: 2,
+    backgroundColor: "#00C4FF",
+  },
+
+  loadingLabel: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.25)",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    fontWeight: "500",
   },
 });
