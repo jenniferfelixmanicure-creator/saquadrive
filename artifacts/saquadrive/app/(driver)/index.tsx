@@ -24,6 +24,7 @@ type RideLocation = { address: string; lat: number; lng: number };
 type RideRequest = {
   rideId: string;
   passenger: string;
+  passengerId?: string;
   passengerRating?: number;
   passengerTotalRides?: number;
   passengerPhotoUrl?: string | null;
@@ -77,7 +78,7 @@ function NotApprovedIllustration({ floatY }: { floatY: Animated.AnimatedInterpol
 }
 
 export default function DriverHomeScreen() {
-  const { user } = useAuth();
+  const { user, apiFetch } = useAuth();
   const { socket, connected } = useSocket();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -98,6 +99,10 @@ export default function DriverHomeScreen() {
   const [arrivedAt, setArrivedAt] = useState<Date | null>(null);
   const [waitSeconds, setWaitSeconds] = useState(0);
   const [waitFeeStarted, setWaitFeeStarted] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [selectedStars, setSelectedStars] = useState(5);
+  const [pendingRating, setPendingRating] = useState<{ rideId: string; passengerId: string; passengerName: string } | null>(null);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -281,7 +286,35 @@ export default function DriverHomeScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (socket && connected) socket.emit("driver:complete_trip", { rideId: activeRide.rideId });
     phaseTimers.current.forEach(clearTimeout); phaseTimers.current = [];
+    const finishedRideId = activeRide.rideId;
+    const finishedPassengerId = activeRide.passengerId;
+    const finishedPassengerName = activeRide.passenger ?? "Passageiro";
     setActiveRide(null); setRidePhase("idle"); setRouteCoords([]); setChatMessages([]); setUnreadCount(0); setArrivedAt(null);
+    if (finishedPassengerId) {
+      setPendingRating({ rideId: finishedRideId, passengerId: finishedPassengerId, passengerName: finishedPassengerName });
+      setSelectedStars(5);
+      setShowRatingModal(true);
+    }
+  }
+
+  async function handleSubmitRating() {
+    if (!pendingRating || !user) return;
+    setRatingSubmitting(true);
+    try {
+      await apiFetch("/api/ratings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rideId: pendingRating.rideId,
+          ratedId: parseInt(pendingRating.passengerId),
+          stars: selectedStars,
+          role: "driver",
+        }),
+      });
+    } catch {}
+    setRatingSubmitting(false);
+    setShowRatingModal(false);
+    setPendingRating(null);
   }
 
   function handleCancelActiveRide() {
@@ -523,6 +556,36 @@ export default function DriverHomeScreen() {
         </View>
       </Modal>
 
+      <Modal visible={showRatingModal} transparent animationType="slide" onRequestClose={() => { setShowRatingModal(false); setPendingRating(null); }}>
+        <View style={styles.pinOverlay}>
+          <View style={[styles.pinModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.pinIconBox, { backgroundColor: colors.accent + "22" }]}><Feather name="star" size={28} color={colors.accent} /></View>
+            <Text style={[styles.pinTitle, { color: colors.foreground }]}>Avaliar passageiro</Text>
+            <Text style={[styles.pinDesc, { color: colors.mutedForeground }]}>
+              Como foi a corrida com {pendingRating?.passengerName ?? "o passageiro"}?
+            </Text>
+            <View style={ratingStyles.starsRow}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <TouchableOpacity key={s} onPress={() => setSelectedStars(s)} activeOpacity={0.7} style={ratingStyles.starBtn}>
+                  <Text style={[ratingStyles.starIcon, { color: s <= selectedStars ? "#F59E0B" : colors.mutedForeground }]}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={[ratingStyles.starLabel, { color: colors.mutedForeground }]}>
+              {selectedStars === 1 ? "Muito ruim" : selectedStars === 2 ? "Ruim" : selectedStars === 3 ? "Regular" : selectedStars === 4 ? "Bom" : "Excelente"}
+            </Text>
+            <View style={styles.pinActions}>
+              <TouchableOpacity style={[styles.pinCancelBtn, { borderColor: colors.border }]} onPress={() => { setShowRatingModal(false); setPendingRating(null); }} activeOpacity={0.7}>
+                <Text style={[styles.pinCancelText, { color: colors.mutedForeground }]}>Pular</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.pinConfirmBtn, { backgroundColor: colors.accent, opacity: ratingSubmitting ? 0.6 : 1 }]} onPress={handleSubmitRating} activeOpacity={0.85} disabled={ratingSubmitting}>
+                <Text style={styles.pinConfirmText}>{ratingSubmitting ? "Enviando…" : "Enviar"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showNotApprovedModal} transparent animationType="fade" onRequestClose={() => setShowNotApprovedModal(false)}>
         <View style={naStyles.naOverlay}>
           <LinearGradient colors={["#0D1B2A","#112240","#0D1B2A"]} style={naStyles.naCard}>
@@ -578,6 +641,13 @@ const naStyles = StyleSheet.create({
   naUnderstoodBtn: { width: "100%", height: 54, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", paddingHorizontal: 20, gap: 12 },
   naUnderstoodIcon: { width: 28, height: 28, borderRadius: 8, backgroundColor: "rgba(52,199,89,0.12)", alignItems: "center", justifyContent: "center" },
   naUnderstoodText: { flex: 1, fontSize: 16, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.75)" },
+});
+
+const ratingStyles = StyleSheet.create({
+  starsRow: { flexDirection: "row", gap: 8, marginVertical: 4 },
+  starBtn: { padding: 4 },
+  starIcon: { fontSize: 40 },
+  starLabel: { fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 2 },
 });
 
 const styles = StyleSheet.create({
