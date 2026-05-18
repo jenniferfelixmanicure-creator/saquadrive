@@ -14,7 +14,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { API_URL } from "@/constants/api";
 
 type ApiRide = {
   id: string;
@@ -109,7 +108,7 @@ function RideItem({ item, colors }: { item: ApiRide; colors: ReturnType<typeof u
 }
 
 export default function DriverHistoryScreen() {
-  const { token } = useAuth();
+  const { apiFetch } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -120,14 +119,12 @@ export default function DriverHistoryScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchHistory = useCallback(async () => {
-    if (!token) return;
     setLoading(true);
     setError(null);
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 30000);
-      const res = await fetch(`${API_URL}/api/rides/driver/history`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await apiFetch("/api/rides/driver/history", {
         signal: controller.signal,
       });
       clearTimeout(timeout);
@@ -139,7 +136,7 @@ export default function DriverHistoryScreen() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [apiFetch]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
