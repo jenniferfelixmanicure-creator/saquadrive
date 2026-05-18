@@ -404,7 +404,16 @@ export default function PassengerHomeScreen() {
               </View>
             </View>
 
-            <Text style={[styles.sheetTitle, { color: colors.foreground, marginTop: 16 }]}>Escolha o tipo</Text>
+            {priceInfo.isPeakHour && (
+              <View style={{ backgroundColor: "#FF6B0015", borderColor: "#FF6B00", borderWidth: 1, borderRadius: 10, padding: 10, marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 18 }}>⚡</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#FF6B00", fontFamily: "Inter_700Bold", fontSize: 13 }}>Tarifa de hora de pico ativa</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 11 }}>Alta demanda na sua região · multiplicador 1.5x</Text>
+                </View>
+              </View>
+            )}
+            <Text style={[styles.sheetTitle, { color: colors.foreground, marginTop: 12 }]}>Escolha o tipo</Text>
             {RIDE_OPTIONS.map((opt) => {
               const { total: optPrice, isPeakHour } = calculatePrice(distKm, opt.type);
               const selected = selectedRideType === opt.type;
@@ -424,8 +433,8 @@ export default function PassengerHomeScreen() {
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                         <Text style={[styles.rideLabel, { color: selected ? "#fff" : colors.foreground }]}>{opt.label}</Text>
                         {isPeakHour && (
-                          <View style={{ backgroundColor: "#FFD60A", paddingHorizontal: 4, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 8, color: "#000", fontFamily: "Inter_700Bold" }}>⚡ PICO</Text>
+                          <View style={{ backgroundColor: "#FF6B00", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, flexDirection: "row", alignItems: "center", gap: 2 }}>
+                            <Text style={{ fontSize: 9, color: "#fff", fontFamily: "Inter_700Bold" }}>⚡ 1.5x</Text>
                           </View>
                         )}
                       </View>
