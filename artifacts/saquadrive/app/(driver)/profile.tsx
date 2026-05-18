@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import React from "react";
 import {
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -104,9 +105,13 @@ export default function DriverProfileScreen() {
       >
         {/* Profile header */}
         <View style={[styles.profileHeader, { paddingTop: topPad + 16 }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          {user?.profilePhotoUrl ? (
+            <Image source={{ uri: user.profilePhotoUrl }} style={[styles.avatar, { borderColor: "#00C4FF44" }]} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: colors.secondary }]}>
+              <Text style={styles.avatarText}>{initials}</Text>
+            </View>
+          )}
           <Text style={[styles.name, { color: colors.foreground }]}>{user?.name}</Text>
           <Text style={[styles.email, { color: colors.mutedForeground }]}>{user?.email}</Text>
 
