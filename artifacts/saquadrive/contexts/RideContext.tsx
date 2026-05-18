@@ -268,7 +268,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   function calculatePrice(distanceKm: number, rideType: RideType) {
     const perKm = RIDE_PRICES[rideType];
     const { multiplier: surgeMultiplier, isPeakHour } = getSurgeMultiplier();
-    const total = Math.round((BASE_FEE + distanceKm * perKm) * surgeMultiplier * 100) / 100;
+    const raw = Math.round((BASE_FEE + distanceKm * perKm) * surgeMultiplier * 100) / 100;
+    const total = Math.max(raw, 10);
     return { total, surgeMultiplier, isPeakHour };
   }
 
