@@ -206,8 +206,8 @@ export default function DriverHomeScreen() {
     if (showNotApprovedModal) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(floatAnim, { toValue: -10, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
-          Animated.timing(floatAnim, { toValue: 0, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
+          Animated.timing(floatAnim, { toValue: -10, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+          Animated.timing(floatAnim, { toValue: 0, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
         ])
       ).start();
     } else {
