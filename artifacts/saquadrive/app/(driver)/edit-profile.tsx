@@ -101,9 +101,7 @@ export default function DriverEditProfileScreen() {
       await updateUser({
         name: name.trim(),
         phone: phone.trim(),
-        vehicleModel: vehicleModel.trim() || undefined,
-        vehiclePlate: vehiclePlate.trim().toUpperCase() || undefined,
-        vehicleType,
+
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -197,44 +195,37 @@ export default function DriverEditProfileScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Tipo de veículo</Text>
             <View style={styles.typeRow}>
-              <TouchableOpacity
-                style={[styles.typeBtn, { borderColor: colors.border, backgroundColor: vehicleType === "car" ? "#00C4FF" : colors.background }]}
-                onPress={() => setVehicleType("car")}
-                activeOpacity={0.8}
-              >
+              <View style={[styles.typeBtn, { borderColor: colors.border, backgroundColor: vehicleType === "car" ? "#00C4FF" : colors.background, opacity: 0.7 }]}>
                 <Feather name="truck" size={16} color={vehicleType === "car" ? "#fff" : colors.mutedForeground} />
                 <Text style={[styles.typeBtnText, { color: vehicleType === "car" ? "#fff" : colors.mutedForeground }]}>Carro</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.typeBtn, { borderColor: colors.border, backgroundColor: vehicleType === "moto" ? "#00C4FF" : colors.background }]}
-                onPress={() => setVehicleType("moto")}
-                activeOpacity={0.8}
-              >
+              </View>
+              <View style={[styles.typeBtn, { borderColor: colors.border, backgroundColor: vehicleType === "moto" ? "#00C4FF" : colors.background, opacity: 0.7 }]}>
                 <Feather name="zap" size={16} color={vehicleType === "moto" ? "#fff" : colors.mutedForeground} />
                 <Text style={[styles.typeBtnText, { color: vehicleType === "moto" ? "#fff" : colors.mutedForeground }]}>Moto</Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Modelo</Text>
             <TextInput
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              value={vehicleModel} onChangeText={setVehicleModel}
+              style={[styles.input, { color: colors.mutedForeground, borderColor: colors.border, backgroundColor: colors.muted }]}
+              value={vehicleModel}
+              editable={false}
               placeholder="Ex: Honda CG 160, Fiat Uno" placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="words" returnKeyType="next"
             />
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>Placa</Text>
             <TextInput
-              style={[styles.input, { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.background }]}
-              value={vehiclePlate} onChangeText={setVehiclePlate}
+              style={[styles.input, { color: colors.mutedForeground, borderColor: colors.border, backgroundColor: colors.muted }]}
+              value={vehiclePlate}
+              editable={false}
               placeholder="ABC-1234" placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="characters" returnKeyType="done"
             />
           </View>
+          <Text style={[styles.hint, { color: colors.mutedForeground, marginTop: 8 }]}>Os dados do veículo só podem ser alterados pelo administrador.</Text>
         </View>
 
         <TouchableOpacity
