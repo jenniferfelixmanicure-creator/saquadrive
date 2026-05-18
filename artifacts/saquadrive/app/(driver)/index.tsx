@@ -295,15 +295,16 @@ export default function DriverHomeScreen() {
 
     socket.on("driver:ride_request", (data: RideRequest) => {
       if (!isOnline || activeRide) return;
+      const safeData: RideRequest = { ...data, passenger: data.passenger ?? "Passageiro" };
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       sendLocalNotification(
         "🚕 Nova Corrida!",
-        `Passageiro: ${data.passenger} está aguardando a ${data.distance} de você.`,
-        data
+        `Passageiro: ${safeData.passenger} está aguardando a ${safeData.distance} de você.`,
+        safeData
       );
       setRequests((prev) => {
-        const exists = prev.find((r) => r.rideId === data.rideId);
-        return exists ? prev : [...prev, data];
+        const exists = prev.find((r) => r.rideId === safeData.rideId);
+        return exists ? prev : [...prev, safeData];
       });
     });
 
