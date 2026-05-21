@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { ridesTable, usersTable, promoCodesTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
+import { askSaquaDrive, calculateSmartPrice } from "../lib/ai.js";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env["JWT_SECRET"];
@@ -214,7 +215,10 @@ export function registerRideSocket(io: Server) {
       const origin = data.origin as RideOriginDest;
       const destination = data.destination as RideOriginDest;
       const distanceKm = data.distanceKm ?? getDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
-      const { total: serverPrice } = calculatePrice(distanceKm, data.rideType);
+      const { total: basePrice, surgeMultiplier } = calculatePrice(distanceKm, data.rideType);
+      const hour = new Date().getHours();
+      const aiResult = await calculateSmartPrice({ distanceKm, rideType: data.rideType, hour, surgeMultiplier }).catch(() => null);
+      const serverPrice = aiResult?.suggestedFare ?? basePrice;
       const ridePin = data.pin ?? Math.floor(1000 + Math.random() * 9000).toString();
 
       const ride: RideRequest = {
@@ -430,7 +434,7 @@ export function registerRideSocket(io: Server) {
       }
     });
 
-    socket.on("chat:send", ({ rideId, senderId, senderName, text, msgId }: { rideId: string; senderId: string; senderName: string; text: string; msgId: string }) => {
+    socket.on("chat:send", async ({ rideId, senderId, senderName, text, msgId }: { rideId: string; senderId: string; senderName: string; text: string; msgId: string }) => {
       const active = activeRides.get(rideId);
       if (!active) return;
       const isParticipant = socket.id === active.passengerSocketId || socket.id === active.driverSocketId;
@@ -438,6 +442,22 @@ export function registerRideSocket(io: Server) {
       const msg: ChatMessage = { msgId, senderId, senderName, text, timestamp: Date.now() };
       const isPassenger = socket.id === active.passengerSocketId;
       io.to(isPassenger ? active.driverSocketId : active.passengerSocketId).emit("chat:message", msg);
+
+      const lower = text.toLowerCase();
+      if (lower.includes("ajuda") || lower.includes("ia") || lower.includes("saquadrive")) {
+        try {
+          const aiResponse = await askSaquaDrive(text, `Corrida ID: ${rideId}`);
+          const aiMsg: ChatMessage = {
+            msgId: `ai-${Date.now()}`,
+            senderId: "0",
+            senderName: "IA SaquaDrive",
+            text: aiResponse,
+            timestamp: Date.now(),
+          };
+          io.to(active.passengerSocketId).emit("chat:message", aiMsg);
+          io.to(active.driverSocketId).emit("chat:message", aiMsg);
+        } catch { }
+      }
     });
 
     socket.on("ride:emergency", ({ rideId }: { rideId: string }) => {
