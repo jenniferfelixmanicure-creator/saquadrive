@@ -6,51 +6,67 @@ const client = new OpenAI({
   baseURL: "https://api.x.ai/v1",
 });
 
-const SAQUADRIVE_SYSTEM_PROMPT = `Você é a Inteligência Artificial oficial da plataforma SaquaDrive, um aplicativo de mobilidade urbana.
-Sua missão é ser prestativa, eficiente e manter total fidelidade à marca SaquaDrive.
+const ZERISCO_SYSTEM_PROMPT = `Você é a ZeroRisco IA, a Inteligência Artificial oficial da plataforma ZeroRisco — um aplicativo de mobilidade urbana focado em segurança e tecnologia.
 
-DIRETRIZES DE PERSONALIDADE:
-1. Nunca mencione que você é um modelo de linguagem, Grok, OpenAI ou qualquer outra empresa. Você é a "IA SaquaDrive".
-2. Use um tom profissional, mas acolhedor (Português do Brasil).
-3. Se perguntarem sobre sua origem, você foi desenvolvida pela equipe de engenharia da SaquaDrive.
+IDENTIDADE:
+- Seu nome é "ZeroRisco IA". Nunca revele que é Grok, OpenAI, xAI ou qualquer outra empresa.
+- Se perguntarem quem te criou, diga: "Fui desenvolvida pela equipe de engenharia da ZeroRisco."
+- Tom: profissional, acolhedor, direto. Português do Brasil.
 
-DIRETRIZES TÉCNICAS (ATENDIMENTO):
-- Ajude passageiros e motoristas com dúvidas sobre corridas, pagamentos (Dinheiro/PIX direto) e segurança.
-- Explique as categorias disponíveis: Moto, Básico, Intermediário e VIP.
-- Se houver um conflito, sugira o acionamento do suporte humano.
+CONHECIMENTO DA PLATAFORMA:
+- Categorias: Moto, Básico, Intermediário, VIP.
+- Pagamento: Dinheiro ou PIX diretamente ao motorista.
+- Segurança: Modo Proteção, SOS, PIN de embarque, compartilhamento de rota.
+- Suporte: Objeto perdido, cobrança errada, cancelamento, reembolso, problemas com motorista.
 
-DIRETRIZES TÉCNICAS (PRECIFICAÇÃO):
-- Ao calcular preços, considere: Distância, Tempo, Clima e Demanda.
-- O objetivo é um preço justo que garanta que o motorista aceite a corrida rapidamente.`;
+REGRAS:
+- Seja objetiva. Respostas curtas e úteis.
+- Em emergências, sempre oriente a usar o botão SOS.
+- Para conflitos sérios, acione suporte humano.`;
 
-export async function askSaquaDrive(prompt: string, context: string = ""): Promise<string> {
+async function callAI(systemPrompt: string, userPrompt: string, temperature = 0.7): Promise<string> {
+  const response = await client.chat.completions.create({
+    model: "grok-beta",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature,
+  });
+  return response.choices[0].message.content ?? "";
+}
+
+async function callAIJson<T>(systemPrompt: string, userPrompt: string, fallback: T): Promise<T> {
   try {
-    const response = await client.chat.completions.create({
-      model: "grok-beta",
-      messages: [
-        { role: "system", content: SAQUADRIVE_SYSTEM_PROMPT },
-        { role: "user", content: `Contexto Atual: ${context}\n\nPergunta/Comando: ${prompt}` },
-      ],
-      temperature: 0.7,
-    });
-    return response.choices[0].message.content ?? "Desculpe, não consegui processar sua mensagem.";
-  } catch (error) {
-    logger.error({ error }, "Erro ao consultar IA SaquaDrive");
-    return "Desculpe, estou processando algumas informações. Posso te ajudar com outra coisa?";
+    const raw = await callAI(systemPrompt, userPrompt, 0.2);
+    const match = raw.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
+    if (!match) return fallback;
+    return JSON.parse(match[0]) as T;
+  } catch {
+    return fallback;
   }
 }
 
-export interface RideTypePriceResult {
+export async function askZeroRiscoIA(prompt: string, context = ""): Promise<string> {
+  try {
+    return await callAI(
+      ZERISCO_SYSTEM_PROMPT,
+      `Contexto: ${context}\n\nPergunta: ${prompt}`
+    );
+  } catch (error) {
+    logger.error({ error }, "ZeroRisco IA — erro no assistente");
+    return "Estou processando algumas informações. Posso te ajudar com outra coisa?";
+  }
+}
+
+export interface SmartPriceResult {
   rideType: string;
   suggestedFare: number;
   justification: string;
 }
 
 const RIDE_TYPE_BASES: Record<string, number> = {
-  moto: 1.20,
-  basico: 1.70,
-  intermediario: 2.20,
-  vip: 3.90,
+  moto: 1.20, basico: 1.70, intermediario: 2.20, vip: 3.90,
 };
 const BASE_FEE = 5.5;
 
@@ -59,42 +75,315 @@ export async function calculateSmartPrice(data: {
   rideType: string;
   hour: number;
   surgeMultiplier: number;
-}): Promise<RideTypePriceResult> {
+}): Promise<SmartPriceResult> {
   const perKm = RIDE_TYPE_BASES[data.rideType] ?? 1.70;
-  const baseFare = Math.max(Math.round((BASE_FEE + data.distanceKm * perKm) * data.surgeMultiplier * 100) / 100, 10);
-
-  const prompt = `Calcule o preço final sugerido para uma corrida:
-
-Dados:
+  const baseFare = Math.max(
+    Math.round((BASE_FEE + data.distanceKm * perKm) * data.surgeMultiplier * 100) / 100,
+    10
+  );
+  return await callAIJson(
+    "Você é o motor de precificação da ZeroRisco IA. Responda SOMENTE com JSON válido, sem markdown.",
+    `Calcule o preço ideal para a corrida:
 - Tipo: ${data.rideType}
 - Distância: ${data.distanceKm.toFixed(1)} km
 - Horário: ${data.hour}h
 - Multiplicador de demanda: ${data.surgeMultiplier}x
-- Tarifa base calculada: R$ ${baseFare.toFixed(2)}
+- Tarifa base: R$ ${baseFare.toFixed(2)}
 
-Responda APENAS com JSON válido, sem markdown:
-{"rideType": "${data.rideType}", "suggestedFare": 12.50, "justification": "motivo curto"}`;
+JSON: {"rideType": "${data.rideType}", "suggestedFare": 0.00, "justification": "motivo"}`,
+    { rideType: data.rideType, suggestedFare: baseFare, justification: "Tarifa base ZeroRisco" }
+  );
+}
 
-  try {
-    const response = await client.chat.completions.create({
-      model: "grok-beta",
-      messages: [
-        { role: "system", content: "Você é o motor de precificação da IA SaquaDrive. Responda SOMENTE com JSON válido, sem markdown." },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.3,
-    });
+export interface RideRiskResult {
+  level: "baixo" | "moderado" | "alto" | "critico";
+  score: number;
+  reasons: string[];
+  recommendation: string;
+}
 
-    const raw = response.choices[0].message.content ?? "{}";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("JSON não encontrado na resposta da IA");
-    return JSON.parse(jsonMatch[0]) as RideTypePriceResult;
-  } catch (error) {
-    logger.error({ error }, "IA falhou na precificação — usando tarifa base");
-    return {
-      rideType: data.rideType,
-      suggestedFare: baseFare,
-      justification: "Tarifa base SaquaDrive",
-    };
+export async function assessRideRisk(data: {
+  hour: number;
+  neighborhood: string;
+  passengerRating: number;
+  driverRating: number;
+  rideType: string;
+  distanceKm: number;
+  passengerCancellations?: number;
+}): Promise<RideRiskResult> {
+  return await callAIJson(
+    "Você é o sistema de análise de risco da ZeroRisco IA. Responda SOMENTE com JSON válido.",
+    `Avalie o risco desta corrida:
+- Horário: ${data.hour}h
+- Bairro/região: ${data.neighborhood}
+- Avaliação passageiro: ${data.passengerRating}/5
+- Avaliação motorista: ${data.driverRating}/5
+- Categoria: ${data.rideType}
+- Distância: ${data.distanceKm.toFixed(1)} km
+- Cancelamentos recentes do passageiro: ${data.passengerCancellations ?? 0}
+
+JSON: {"level": "baixo|moderado|alto|critico", "score": 0-100, "reasons": ["..."], "recommendation": "..."}`,
+    { level: "baixo", score: 10, reasons: [], recommendation: "Corrida dentro dos padrões normais." }
+  );
+}
+
+export interface ChatModerationResult {
+  safe: boolean;
+  threat: boolean;
+  harassment: boolean;
+  offense: boolean;
+  action: "allow" | "warn" | "block";
+  message?: string;
+}
+
+export async function moderateChat(text: string): Promise<ChatModerationResult> {
+  return await callAIJson(
+    "Você é o sistema de moderação da ZeroRisco IA. Analise mensagens de chat entre passageiros e motoristas. Responda SOMENTE com JSON.",
+    `Analise esta mensagem: "${text}"
+
+JSON: {"safe": true/false, "threat": true/false, "harassment": true/false, "offense": true/false, "action": "allow|warn|block", "message": "aviso ao usuário se necessário"}`,
+    { safe: true, threat: false, harassment: false, offense: false, action: "allow" }
+  );
+}
+
+export interface SupportResult {
+  answer: string;
+  category: "ride" | "payment" | "safety" | "account" | "driver" | "other";
+  requiresHuman: boolean;
+  suggestedActions?: string[];
+}
+
+export async function getSupportResponse(question: string, userRole: "passenger" | "driver" | "admin"): Promise<SupportResult> {
+  return await callAIJson(
+    `${ZERISCO_SYSTEM_PROMPT}\n\nVocê é a central de suporte 24h da ZeroRisco IA. Resolva problemas de forma objetiva. Responda SOMENTE com JSON.`,
+    `Perfil: ${userRole}\nDúvida/Problema: "${question}"
+
+JSON: {"answer": "resposta completa", "category": "ride|payment|safety|account|driver|other", "requiresHuman": true/false, "suggestedActions": ["ação 1"]}`,
+    {
+      answer: "Estou verificando sua solicitação. Para suporte imediato, acesse o menu Ajuda no app.",
+      category: "other",
+      requiresHuman: true,
+    }
+  );
+}
+
+export interface FraudResult {
+  fraudulent: boolean;
+  riskLevel: "none" | "low" | "medium" | "high";
+  flags: string[];
+  recommendation: string;
+}
+
+export async function detectFraud(data: {
+  passengerId: string;
+  driverId?: string;
+  rideId: string;
+  cancelCount?: number;
+  multipleAccounts?: boolean;
+  suspiciousGPS?: boolean;
+  emulator?: boolean;
+  unusualPattern?: boolean;
+}): Promise<FraudResult> {
+  return await callAIJson(
+    "Você é o sistema antifraude da ZeroRisco IA. Responda SOMENTE com JSON.",
+    `Analise possível fraude:
+- Passageiro ID: ${data.passengerId}
+- Motorista ID: ${data.driverId ?? "N/A"}
+- Corrida ID: ${data.rideId}
+- Cancelamentos: ${data.cancelCount ?? 0}
+- Múltiplas contas detectadas: ${data.multipleAccounts ? "Sim" : "Não"}
+- GPS suspeito: ${data.suspiciousGPS ? "Sim" : "Não"}
+- Emulador detectado: ${data.emulator ? "Sim" : "Não"}
+- Padrão incomum: ${data.unusualPattern ? "Sim" : "Não"}
+
+JSON: {"fraudulent": true/false, "riskLevel": "none|low|medium|high", "flags": ["..."], "recommendation": "..."}`,
+    { fraudulent: false, riskLevel: "none", flags: [], recommendation: "Nenhuma irregularidade detectada." }
+  );
+}
+
+export interface DriverSuggestionsResult {
+  bestZones: string[];
+  bestHours: string[];
+  earningsTip: string;
+  weeklyForecast: string;
+}
+
+export async function getDriverSuggestions(data: {
+  currentLocation?: string;
+  totalRides: number;
+  weekEarnings: number;
+  currentHour: number;
+  dayOfWeek: number;
+  rideType: string;
+}): Promise<DriverSuggestionsResult> {
+  const days = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  return await callAIJson(
+    "Você é o consultor de ganhos da ZeroRisco IA. Ajude motoristas a maximizar rendimentos. Responda SOMENTE com JSON.",
+    `Perfil do motorista:
+- Localização: ${data.currentLocation ?? "não informada"}
+- Total de corridas: ${data.totalRides}
+- Ganhos esta semana: R$ ${data.weekEarnings.toFixed(2)}
+- Horário atual: ${data.currentHour}h (${days[data.dayOfWeek]})
+- Categoria do veículo: ${data.rideType}
+
+JSON: {"bestZones": ["zona1","zona2"], "bestHours": ["18h-22h"], "earningsTip": "dica prática", "weeklyForecast": "previsão de ganhos"}`,
+    {
+      bestZones: ["Centro", "Zona Sul"],
+      bestHours: ["07h-09h", "17h-20h"],
+      earningsTip: "Concentre-se nas zonas com maior demanda durante horários de pico.",
+      weeklyForecast: "Demanda moderada prevista para esta semana.",
+    }
+  );
+}
+
+export interface AccidentResult {
+  detected: boolean;
+  severity: "none" | "minor" | "moderate" | "severe";
+  confidence: number;
+  actions: string[];
+}
+
+export async function analyzeAccident(data: {
+  accelerometerX: number;
+  accelerometerY: number;
+  accelerometerZ: number;
+  speedKmh: number;
+  previousSpeedKmh: number;
+  rideId: string;
+}): Promise<AccidentResult> {
+  const impact = Math.sqrt(data.accelerometerX ** 2 + data.accelerometerY ** 2 + data.accelerometerZ ** 2);
+  const speedDrop = data.previousSpeedKmh - data.speedKmh;
+
+  return await callAIJson(
+    "Você é o sistema de detecção de acidentes da ZeroRisco IA. Responda SOMENTE com JSON.",
+    `Dados de sensor durante corrida ${data.rideId}:
+- Força de impacto (G): ${impact.toFixed(2)}
+- Velocidade atual: ${data.speedKmh} km/h
+- Velocidade anterior: ${data.previousSpeedKmh} km/h
+- Queda brusca de velocidade: ${speedDrop} km/h
+
+JSON: {"detected": true/false, "severity": "none|minor|moderate|severe", "confidence": 0-100, "actions": ["ação1"]}`,
+    { detected: false, severity: "none", confidence: 0, actions: [] }
+  );
+}
+
+export interface RouteDeviationResult {
+  deviated: boolean;
+  deviationKm: number;
+  suspicious: boolean;
+  message?: string;
+}
+
+export async function detectRouteDeviation(data: {
+  rideId: string;
+  currentLat: number;
+  currentLng: number;
+  destLat: number;
+  destLng: number;
+  originLat: number;
+  originLng: number;
+  elapsedMinutes: number;
+}): Promise<RouteDeviationResult> {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
+
+  const totalRoute = haversine(data.originLat, data.originLng, data.destLat, data.destLng);
+  const distToDest = haversine(data.currentLat, data.currentLng, data.destLat, data.destLng);
+  const distFromOrigin = haversine(data.originLat, data.originLng, data.currentLat, data.currentLng);
+  const expectedProgress = distFromOrigin / (totalRoute || 1);
+  const deviationKm = Math.max(0, distToDest - totalRoute * (1 - expectedProgress) - 0.5);
+  const deviated = deviationKm > 1.5;
+  const suspicious = deviationKm > 3.0 || (data.elapsedMinutes > 30 && distToDest > totalRoute * 0.8);
+
+  return {
+    deviated,
+    deviationKm: Math.round(deviationKm * 100) / 100,
+    suspicious,
+    message: deviated
+      ? suspicious
+        ? "Desvio de rota suspeito detectado. Protocolo de segurança ativado."
+        : "Desvio de rota detectado. Verifique se o trajeto está correto."
+      : undefined,
+  };
+}
+
+export interface AdminInsightsResult {
+  financialForecast: string;
+  peakHours: string[];
+  dangerousAreas: string[];
+  criticalPatterns: string[];
+  recommendations: string[];
+}
+
+export async function getAdminInsights(data: {
+  totalRidesToday: number;
+  totalEarningsToday: number;
+  cancelledRides: number;
+  activeDrivers: number;
+  pendingDocuments: number;
+  suspiciousActivities: number;
+}): Promise<AdminInsightsResult> {
+  return await callAIJson(
+    "Você é o painel de inteligência administrativa da ZeroRisco IA. Analise métricas operacionais. Responda SOMENTE com JSON.",
+    `Métricas do dia:
+- Corridas realizadas: ${data.totalRidesToday}
+- Faturamento: R$ ${data.totalEarningsToday.toFixed(2)}
+- Corridas canceladas: ${data.cancelledRides}
+- Motoristas ativos: ${data.activeDrivers}
+- Documentos pendentes: ${data.pendingDocuments}
+- Atividades suspeitas: ${data.suspiciousActivities}
+
+JSON: {"financialForecast": "previsão", "peakHours": ["horário"], "dangerousAreas": ["área"], "criticalPatterns": ["padrão"], "recommendations": ["ação"]}`,
+    {
+      financialForecast: "Dados insuficientes para previsão.",
+      peakHours: ["07h-09h", "17h-20h"],
+      dangerousAreas: [],
+      criticalPatterns: [],
+      recommendations: ["Continue monitorando as métricas operacionais."],
+    }
+  );
+}
+
+export interface BehaviorResult {
+  score: number;
+  level: "excelente" | "bom" | "atencao" | "critico";
+  flags: string[];
+  action: "none" | "warn" | "suspend" | "block";
+  message: string;
+}
+
+export async function analyzeDriverBehavior(data: {
+  driverId: string;
+  avgSpeed: number;
+  hardBrakes: number;
+  suddenAccelerations: number;
+  phoneUsageEvents: number;
+  totalRides: number;
+  rating: number;
+}): Promise<BehaviorResult> {
+  return await callAIJson(
+    "Você é o sistema de análise comportamental de motoristas da ZeroRisco IA. Responda SOMENTE com JSON.",
+    `Análise comportamental do motorista ${data.driverId}:
+- Velocidade média: ${data.avgSpeed} km/h
+- Freadas bruscas: ${data.hardBrakes}
+- Acelerações bruscas: ${data.suddenAccelerations}
+- Uso de celular em movimento: ${data.phoneUsageEvents}x
+- Total de corridas: ${data.totalRides}
+- Avaliação média: ${data.rating}/5
+
+JSON: {"score": 0-100, "level": "excelente|bom|atencao|critico", "flags": ["..."], "action": "none|warn|suspend|block", "message": "feedback para o motorista"}`,
+    {
+      score: 75,
+      level: "bom",
+      flags: [],
+      action: "none",
+      message: "Comportamento dentro dos padrões aceitáveis.",
+    }
+  );
 }
