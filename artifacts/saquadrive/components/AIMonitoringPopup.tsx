@@ -15,12 +15,45 @@ import { Feather } from "@expo/vector-icons";
 const NEON = "#00C4FF";
 const NEON_GREEN = "#00FF88";
 
+type Variant = "passenger" | "driver";
+
+const VARIANT_CONFIG: Record<Variant, {
+  neon: string;
+  ring2: string;
+  label: string;
+  title: string;
+  subtitle: string;
+  statusText: string;
+  btnText: string;
+}> = {
+  passenger: {
+    neon: NEON,
+    ring2: NEON_GREEN,
+    label: "ZeroRisco IA",
+    title: "Viagem sendo Monitorada.",
+    subtitle: "Sua segurança está ativa em tempo real",
+    statusText: "Monitoramento ativo",
+    btnText: "Entendido",
+  },
+  driver: {
+    neon: NEON_GREEN,
+    ring2: NEON,
+    label: "ZeroRisco IA",
+    title: "Monitoramento de Direção Ativo.",
+    subtitle: "Dirija com segurança. Estamos com você.",
+    statusText: "Análise de comportamento ativa",
+    btnText: "Ciente",
+  },
+};
+
 type Props = {
   visible: boolean;
   onClose: () => void;
+  variant?: Variant;
 };
 
-export default function AIMonitoringPopup({ visible, onClose }: Props) {
+export default function AIMonitoringPopup({ visible, onClose, variant = "passenger" }: Props) {
+  const cfg = VARIANT_CONFIG[variant];
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const shieldPulse = useRef(new Animated.Value(1)).current;
@@ -129,7 +162,7 @@ export default function AIMonitoringPopup({ visible, onClose }: Props) {
                 style={[
                   styles.ring,
                   {
-                    borderColor: i === 1 ? NEON_GREEN : NEON,
+                    borderColor: i === 1 ? cfg.ring2 : cfg.neon,
                     opacity: o,
                     transform: [{ scale: ringScale(s) }],
                   },
@@ -140,9 +173,9 @@ export default function AIMonitoringPopup({ visible, onClose }: Props) {
 
           {/* Shield com logo */}
           <Animated.View style={[styles.shieldWrapper, { transform: [{ scale: shieldPulse }] }]}>
-            <View style={styles.shieldOuter}>
+            <View style={[styles.shieldOuter, { borderColor: cfg.neon + "66", shadowColor: cfg.neon, backgroundColor: cfg.neon + "1A" }]}>
               <View style={styles.shieldInner}>
-                <Feather name="shield" size={48} color={NEON} style={styles.shieldIcon} />
+                <Feather name="shield" size={48} color={cfg.neon} style={styles.shieldIcon} />
                 <Image
                   source={require("@/assets/images/zerorisco_logo_futuristic.png")}
                   style={styles.logo}
@@ -154,20 +187,24 @@ export default function AIMonitoringPopup({ visible, onClose }: Props) {
 
           {/* Textos */}
           <View style={styles.textBlock}>
-            <Text style={styles.aiLabel}>ZeroRisco IA</Text>
-            <Text style={styles.title}>Viagem sendo Monitorada.</Text>
-            <Text style={styles.subtitle}>Sua segurança está ativa em tempo real</Text>
+            <Text style={[styles.aiLabel, { color: cfg.neon }]}>{cfg.label}</Text>
+            <Text style={styles.title}>{cfg.title}</Text>
+            <Text style={styles.subtitle}>{cfg.subtitle}</Text>
           </View>
 
           {/* Indicador de status */}
-          <View style={styles.statusRow}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>Monitoramento ativo</Text>
+          <View style={[styles.statusRow, { backgroundColor: cfg.ring2 + "14", borderColor: cfg.ring2 + "33" }]}>
+            <View style={[styles.statusDot, { backgroundColor: cfg.ring2, shadowColor: cfg.ring2 }]} />
+            <Text style={[styles.statusText, { color: cfg.ring2 }]}>{cfg.statusText}</Text>
           </View>
 
           {/* Botão fechar */}
-          <TouchableOpacity style={styles.closeBtn} onPress={handleClose} activeOpacity={0.8}>
-            <Text style={styles.closeBtnText}>Entendido</Text>
+          <TouchableOpacity
+            style={[styles.closeBtn, { backgroundColor: cfg.neon + "26", borderColor: cfg.neon + "66" }]}
+            onPress={handleClose}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.closeBtnText, { color: cfg.neon }]}>{cfg.btnText}</Text>
           </TouchableOpacity>
         </Animated.View>
       </Animated.View>
