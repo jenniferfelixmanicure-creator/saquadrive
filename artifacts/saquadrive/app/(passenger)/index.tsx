@@ -14,6 +14,7 @@ import { useRide, Location2 as Location, RideType } from "@/contexts/RideContext
 import { useSocket } from "@/contexts/SocketContext";
 import { useColors } from "@/hooks/useColors";
 import RideChat, { ChatMessage } from "@/components/RideChat";
+import AIMonitoringPopup from "@/components/AIMonitoringPopup";
 import { searchPlaces, getPlaceDetails, getRoute } from "@/lib/google-maps";
 import { API_URL } from "@/constants/api";
 
@@ -78,6 +79,8 @@ export default function PassengerHomeScreen() {
   const [promoError, setPromoError] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
 
+  const [showMonitoringPopup, setShowMonitoringPopup] = useState(false);
+
   // Suspensão
   const [isSuspended, setIsSuspended] = useState(false);
   const [suspensionFee, setSuspensionFee] = useState(7.50);
@@ -103,7 +106,7 @@ export default function PassengerHomeScreen() {
   useEffect(() => {
     if (rideStatus === "finding") setPhase("finding");
     else if (rideStatus === "driver_coming") setPhase("driver_coming");
-    else if (rideStatus === "in_progress") setPhase("in_progress");
+    else if (rideStatus === "in_progress") { setPhase("in_progress"); setShowMonitoringPopup(true); }
     else if (rideStatus === "rating") { setPhase("rating"); setChatOpen(false); setChatMessages([]); setUnreadCount(0); }
     else if (rideStatus === "idle" && phase !== "idle" && phase !== "typing" && phase !== "confirming") {
       setPhase("idle"); setChatMessages([]); setUnreadCount(0);
@@ -265,6 +268,8 @@ export default function PassengerHomeScreen() {
         <RideChat visible={chatOpen} onClose={() => setChatOpen(false)} rideId={currentRide.id} myId={user.id} myName={user.name}
           otherName={currentRide.driver?.name ?? "Motorista"} socket={socket} messages={chatMessages} onNewMessage={(msg) => setChatMessages((prev) => [...prev, msg])} />
       )}
+
+      <AIMonitoringPopup visible={showMonitoringPopup} onClose={() => setShowMonitoringPopup(false)} />
 
       {/* Suspensão modal */}
       <Modal visible={isSuspended} transparent animationType="slide" onRequestClose={() => {}}>
