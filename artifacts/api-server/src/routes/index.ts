@@ -6,6 +6,7 @@ import ridesRouter from "./rides.js";
 import ratingsRouter from "./ratings.js";
 import adminRouter from "./admin.js";
 import documentsRouter from "./documents.js";
+import aiRouter from "./ai.js";
 
 const router: IRouter = Router();
 
@@ -16,6 +17,6 @@ router.use(ridesRouter);
 router.use(ratingsRouter);
 router.use(documentsRouter);
 router.use(adminRouter);
+router.use(aiRouter);
 
 export default router;
-
