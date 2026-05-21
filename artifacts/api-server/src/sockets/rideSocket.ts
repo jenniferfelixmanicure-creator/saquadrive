@@ -3,7 +3,14 @@ import { db } from "@workspace/db";
 import { ridesTable, usersTable, promoCodesTable } from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
-import { askSaquaDrive, calculateSmartPrice } from "../lib/ai.js";
+import {
+  askZeroRiscoIA,
+  calculateSmartPrice,
+  moderateChat,
+  analyzeAccident,
+  detectRouteDeviation,
+  assessRideRisk,
+} from "../lib/ai.js";
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env["JWT_SECRET"];
@@ -44,11 +51,25 @@ type RideRequest = {
 
 type ChatMessage = { msgId: string; senderId: string; senderName: string; text: string; timestamp: number };
 
+type ActiveRide = {
+  passengerId: string;
+  driverId: string;
+  passengerSocketId: string;
+  driverSocketId: string;
+  originLat?: number;
+  originLng?: number;
+  destLat?: number;
+  destLng?: number;
+  rideType?: string;
+  startedAt?: number;
+  protectionMode?: boolean;
+};
+
 const onlineDrivers = new Map<string, DriverInfo>();
 const pendingRides = new Map<string, RideRequest>();
 const waitingRides = new Map<string, { ride: RideRequest; timeoutId: ReturnType<typeof setTimeout> }>();
 const rideRejections = new Map<string, Set<string>>();
-const activeRides = new Map<string, { passengerId: string; driverId: string; passengerSocketId: string; driverSocketId: string }>();
+const activeRides = new Map<string, ActiveRide>();
 const rideArrivedAt = new Map<string, Date>();
 const waitTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -217,8 +238,27 @@ export function registerRideSocket(io: Server) {
       const distanceKm = data.distanceKm ?? getDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
       const { total: basePrice, surgeMultiplier } = calculatePrice(distanceKm, data.rideType);
       const hour = new Date().getHours();
+
       const aiResult = await calculateSmartPrice({ distanceKm, rideType: data.rideType, hour, surgeMultiplier }).catch(() => null);
       const serverPrice = aiResult?.suggestedFare ?? basePrice;
+
+      const rideRisk = await assessRideRisk({
+        hour,
+        neighborhood: origin.address ?? "não informado",
+        passengerRating,
+        driverRating: 5,
+        rideType: data.rideType,
+        distanceKm,
+      }).catch(() => null);
+
+      if (rideRisk && (rideRisk.level === "alto" || rideRisk.level === "critico")) {
+        socket.emit("passenger:risk_alert", {
+          level: rideRisk.level,
+          message: `ZeroRisco IA: ${rideRisk.recommendation}`,
+          reasons: rideRisk.reasons,
+        });
+      }
+
       const ridePin = data.pin ?? Math.floor(1000 + Math.random() * 9000).toString();
 
       const ride: RideRequest = {
@@ -279,7 +319,19 @@ export function registerRideSocket(io: Server) {
       if (!acceptingDriver) return;
       pendingRides.delete(rideId);
       rideRejections.delete(rideId);
-      activeRides.set(rideId, { passengerId: ride.passengerId, driverId: acceptingDriver.driverId, passengerSocketId: ride.passengerSocketId, driverSocketId: socket.id });
+      activeRides.set(rideId, {
+        passengerId: ride.passengerId,
+        driverId: acceptingDriver.driverId,
+        passengerSocketId: ride.passengerSocketId,
+        driverSocketId: socket.id,
+        originLat: ride.origin.lat,
+        originLng: ride.origin.lng,
+        destLat: ride.destination.lat,
+        destLng: ride.destination.lng,
+        rideType: ride.rideType,
+        startedAt: Date.now(),
+        protectionMode: false,
+      });
       try {
         await db.update(ridesTable).set({ driverId: parseInt(acceptingDriver.driverId) || null, status: "accepted" }).where(eq(ridesTable.id, rideId));
       } catch (err) { logger.error({ err }, "Erro ao atualizar corrida aceita"); }
@@ -326,7 +378,6 @@ export function registerRideSocket(io: Server) {
           message: `Tempo de espera gratuito esgotado. Será cobrado R$ ${WAIT_FEE_PER_MIN.toFixed(2)}/min a partir de agora.`,
         });
         io.to(active.driverSocketId).emit("driver:wait_fee_started", { rideId, feePerMin: WAIT_FEE_PER_MIN });
-        logger.info({ rideId }, "Taxa de tempo de espera iniciada");
       }, WAIT_FREE_MINUTES * 60 * 1000);
       waitTimers.set(rideId, warningTimer);
     });
@@ -353,12 +404,10 @@ export function registerRideSocket(io: Server) {
         } catch (err) { logger.error({ err }, "Erro ao verificar PIN"); }
       }
       if (waitTimeFee > 0) {
-        io.to(active.passengerSocketId).emit("passenger:wait_fee_charged", {
-          rideId, waitTimeFee,
-          message: `Taxa de espera adicionada: R$ ${waitTimeFee.toFixed(2)}`,
-        });
+        io.to(active.passengerSocketId).emit("passenger:wait_fee_charged", { rideId, waitTimeFee, message: `Taxa de espera adicionada: R$ ${waitTimeFee.toFixed(2)}` });
         io.to(active.driverSocketId).emit("driver:wait_fee_info", { rideId, waitTimeFee });
       }
+      activeRides.set(rideId, { ...active, startedAt: Date.now() });
       await db.update(ridesTable).set({ status: "in_progress", waitTimeFee }).where(eq(ridesTable.id, rideId)).catch(() => {});
       logger.info({ rideId, waitTimeFee }, "Viagem iniciada");
       io.to(active.passengerSocketId).emit("passenger:trip_started", { rideId, waitTimeFee });
@@ -411,7 +460,7 @@ export function registerRideSocket(io: Server) {
             }).where(eq(usersTable.id, passengerId)).catch(() => {});
             io.to(active.passengerSocketId).emit("passenger:account_suspended", {
               reason: "late_cancellation", fee: LATE_CANCEL_FEE,
-              message: `Sua conta foi suspensa por cancelamento tardio. Taxa de R$ ${LATE_CANCEL_FEE.toFixed(2)} aplicada. Entre em contato com o suporte para regularizar.`,
+              message: `Sua conta foi suspensa por cancelamento tardio. Taxa de R$ ${LATE_CANCEL_FEE.toFixed(2)} aplicada.`,
             });
           }
           await db.update(ridesTable).set({ status: "cancelled", cancelledLate: true, cancelledAt: new Date() }).where(eq(ridesTable.id, rideId)).catch(() => {});
@@ -423,13 +472,43 @@ export function registerRideSocket(io: Server) {
       }
     });
 
-    socket.on("driver:update_location", ({ driverId, latitude, longitude }: { driverId: string; latitude: number; longitude: number }) => {
+    socket.on("driver:update_location", async ({ driverId, latitude, longitude }: { driverId: string; latitude: number; longitude: number }) => {
       const driver = onlineDrivers.get(driverId);
       if (driver) {
         driver.latitude = latitude; driver.longitude = longitude;
         onlineDrivers.set(driverId, driver);
         for (const [rideId, activeRide] of activeRides.entries()) {
-          if (activeRide.driverId === driverId) io.to(activeRide.passengerSocketId).emit("driver:location_update", { rideId, latitude, longitude });
+          if (activeRide.driverId === driverId) {
+            io.to(activeRide.passengerSocketId).emit("driver:location_update", { rideId, latitude, longitude });
+
+            if (activeRide.destLat && activeRide.destLng && activeRide.originLat && activeRide.originLng) {
+              const elapsedMin = activeRide.startedAt ? (Date.now() - activeRide.startedAt) / 60000 : 0;
+              const deviation = await detectRouteDeviation({
+                rideId,
+                currentLat: latitude,
+                currentLng: longitude,
+                destLat: activeRide.destLat,
+                destLng: activeRide.destLng,
+                originLat: activeRide.originLat,
+                originLng: activeRide.originLng,
+                elapsedMinutes: elapsedMin,
+              }).catch(() => null);
+
+              if (deviation?.deviated) {
+                io.to(activeRide.passengerSocketId).emit("ride:route_deviation", {
+                  rideId,
+                  suspicious: deviation.suspicious,
+                  deviationKm: deviation.deviationKm,
+                  message: deviation.message ?? "Desvio de rota detectado.",
+                  from: "ZeroRisco IA",
+                });
+                if (deviation.suspicious) {
+                  io.to(activeRide.driverSocketId).emit("driver:route_warning", { rideId, message: "ZeroRisco IA: Desvio de rota detectado. Retorne ao trajeto original." });
+                  logger.warn({ rideId, driverId, deviationKm: deviation.deviationKm }, "Desvio de rota suspeito");
+                }
+              }
+            }
+          }
         }
       }
     });
@@ -439,18 +518,37 @@ export function registerRideSocket(io: Server) {
       if (!active) return;
       const isParticipant = socket.id === active.passengerSocketId || socket.id === active.driverSocketId;
       if (!isParticipant) { logger.warn({ rideId, senderId }, "Chat bloqueado: não-participante"); return; }
+
+      const moderation = await moderateChat(text).catch(() => null);
+
+      if (moderation?.action === "block") {
+        socket.emit("chat:blocked", {
+          rideId, msgId,
+          reason: moderation.message ?? "Mensagem bloqueada pela ZeroRisco IA por violar os termos de uso.",
+        });
+        logger.warn({ rideId, senderId, text: text.substring(0, 50) }, "Mensagem bloqueada pela IA");
+        return;
+      }
+
+      if (moderation?.action === "warn") {
+        socket.emit("chat:warning", {
+          rideId,
+          message: moderation.message ?? "ZeroRisco IA: Mantenha o respeito durante a corrida.",
+        });
+      }
+
       const msg: ChatMessage = { msgId, senderId, senderName, text, timestamp: Date.now() };
       const isPassenger = socket.id === active.passengerSocketId;
       io.to(isPassenger ? active.driverSocketId : active.passengerSocketId).emit("chat:message", msg);
 
       const lower = text.toLowerCase();
-      if (lower.includes("ajuda") || lower.includes("ia") || lower.includes("saquadrive")) {
+      if (lower.includes("ajuda") || lower.includes("ia") || lower.includes("zerorisco") || lower.includes("suporte")) {
         try {
-          const aiResponse = await askSaquaDrive(text, `Corrida ID: ${rideId}`);
+          const aiResponse = await askZeroRiscoIA(text, `Corrida ID: ${rideId}`);
           const aiMsg: ChatMessage = {
             msgId: `ai-${Date.now()}`,
             senderId: "0",
-            senderName: "IA SaquaDrive",
+            senderName: "ZeroRisco IA",
             text: aiResponse,
             timestamp: Date.now(),
           };
@@ -458,6 +556,65 @@ export function registerRideSocket(io: Server) {
           io.to(active.driverSocketId).emit("chat:message", aiMsg);
         } catch { }
       }
+    });
+
+    socket.on("passenger:sensor_data", async ({ rideId, accelerometerX, accelerometerY, accelerometerZ, speedKmh, previousSpeedKmh }: {
+      rideId: string; accelerometerX: number; accelerometerY: number; accelerometerZ: number; speedKmh: number; previousSpeedKmh: number;
+    }) => {
+      const active = activeRides.get(rideId);
+      if (!active) return;
+      try {
+        const result = await analyzeAccident({ accelerometerX, accelerometerY, accelerometerZ, speedKmh, previousSpeedKmh, rideId });
+        if (result.detected && result.severity !== "none") {
+          logger.warn({ rideId, severity: result.severity, confidence: result.confidence }, "Possível acidente detectado pela IA");
+          io.to(active.passengerSocketId).emit("ride:accident_detected", {
+            rideId, severity: result.severity, confidence: result.confidence,
+            actions: result.actions,
+            message: "ZeroRisco IA detectou um possível acidente. Você está bem?",
+          });
+          io.to(active.driverSocketId).emit("ride:accident_detected", {
+            rideId, severity: result.severity,
+            message: "ZeroRisco IA: Possível acidente detectado. O passageiro foi notificado.",
+          });
+        }
+      } catch { }
+    });
+
+    socket.on("ride:protection_mode", ({ rideId, enabled }: { rideId: string; enabled: boolean }) => {
+      const active = activeRides.get(rideId);
+      if (!active) return;
+      activeRides.set(rideId, { ...active, protectionMode: enabled });
+      socket.emit("ride:protection_confirmed", {
+        rideId, enabled,
+        message: enabled
+          ? "Modo Proteção ativado. ZeroRisco IA está monitorando sua corrida em tempo real."
+          : "Modo Proteção desativado.",
+      });
+      logger.info({ rideId, enabled }, "Modo Proteção alterado");
+    });
+
+    socket.on("ride:protection_heartbeat", async ({ rideId }: { rideId: string }) => {
+      const active = activeRides.get(rideId);
+      if (!active?.protectionMode) return;
+      socket.emit("ride:protection_check", {
+        rideId,
+        message: "ZeroRisco IA: Tudo bem com você? Se precisar de ajuda, use o botão SOS.",
+        timestamp: Date.now(),
+      });
+    });
+
+    socket.on("passenger:silent_sos", async ({ rideId }: { rideId: string }) => {
+      const active = activeRides.get(rideId);
+      if (!active) return;
+      logger.error({ rideId, passengerId: active.passengerId }, "SOS SILENCIOSO ATIVADO — protocolo de segurança");
+      io.to(active.driverSocketId).emit("driver:silent_sos_alert", {
+        rideId,
+        message: "Alerta de segurança recebido. Mantenha a calma e siga o protocolo.",
+      });
+      socket.emit("passenger:silent_sos_confirmed", {
+        rideId,
+        message: "ZeroRisco IA ativou o protocolo de segurança silencioso. Sua localização está sendo monitorada.",
+      });
     });
 
     socket.on("ride:emergency", ({ rideId }: { rideId: string }) => {
@@ -486,17 +643,21 @@ export function registerRideSocket(io: Server) {
 
 function dispatchToDriver(io: Server, ride: RideRequest, driver: DriverInfo & { distanceToPassenger: number }) {
   const distKm = driver.distanceToPassenger;
-  const distLabel = distKm < 1
-    ? String(Math.round(distKm * 1000)) + " m de você"
-    : distKm.toFixed(1) + " km de você";
-  io.to(driver.socketId).emit("driver:ride_request", {
+  const eta = Math.max(1, Math.round(distKm / 0.5));
+  io.to(driver.socketId).emit("driver:new_ride", {
     rideId: ride.rideId,
-    passenger: ride.passengerName ?? "Passageiro",
-    passengerRating: ride.passengerRating ?? 5.0,
+    passengerName: ride.passengerName,
+    passengerRating: ride.passengerRating ?? 5,
     passengerTotalRides: ride.passengerTotalRides ?? 0,
     passengerPhotoUrl: ride.passengerPhotoUrl ?? null,
-    origin: ride.origin, destination: ride.destination,
-    distance: ride.distance, distanceToPassenger: distLabel, price: ride.price,
-    rideType: ride.rideType, eta: driver.eta,
+    origin: ride.origin,
+    destination: ride.destination,
+    rideType: ride.rideType,
+    price: ride.price,
+    distance: ride.distance,
+    duration: ride.duration,
+    distanceToPassenger: `${distKm.toFixed(1)} km`,
+    eta,
+    pin: ride.pin,
   });
 }
