@@ -16,6 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useSocket } from "@/contexts/SocketContext";
 import { useColors } from "@/hooks/useColors";
 import RideChat, { ChatMessage } from "@/components/RideChat";
+import AIMonitoringPopup from "@/components/AIMonitoringPopup";
 import { getRoute } from "@/lib/google-maps";
 import { sendLocalNotification } from "@/lib/notifications";
 
@@ -103,6 +104,7 @@ export default function DriverHomeScreen() {
   const [selectedStars, setSelectedStars] = useState(5);
   const [pendingRating, setPendingRating] = useState<{ rideId: string; passengerId: string; passengerName: string } | null>(null);
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
+  const [showMonitoringPopup, setShowMonitoringPopup] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -272,7 +274,7 @@ export default function DriverHomeScreen() {
     if (!activeRide) return;
     if (pinInput.length !== 4) { setPinError("Digite o código de 4 dígitos mostrado ao passageiro."); return; }
     if (socket && connected) socket.emit("driver:start_trip", { rideId: activeRide.rideId, pin: pinInput });
-    setShowPinModal(false); setRidePhase("in_progress"); setArrivedAt(null);
+    setShowPinModal(false); setRidePhase("in_progress"); setArrivedAt(null); setShowMonitoringPopup(true);
   }
 
   function handleReject(rideId: string) {
@@ -533,6 +535,8 @@ export default function DriverHomeScreen() {
       {activeRide && user && (
         <RideChat visible={chatOpen} onClose={() => setChatOpen(false)} rideId={activeRide.rideId} myId={user.id} myName={user.name} otherName={activeRide.passenger} socket={socket} messages={chatMessages} onNewMessage={(msg) => setChatMessages((prev) => [...prev, msg])} />
       )}
+
+      <AIMonitoringPopup visible={showMonitoringPopup} onClose={() => setShowMonitoringPopup(false)} variant="driver" />
 
       <Modal visible={showPinModal} transparent animationType="fade" onRequestClose={() => setShowPinModal(false)}>
         <View style={styles.pinOverlay}>
