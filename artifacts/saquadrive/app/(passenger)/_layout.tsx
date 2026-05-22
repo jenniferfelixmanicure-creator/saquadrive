@@ -72,6 +72,7 @@ export default function PassengerLayout() {
       <Tabs.Screen name="payment-methods" options={{ href: null }} />
       <Tabs.Screen name="security" options={{ href: null }} />
       <Tabs.Screen name="upload-documents" options={{ href: null }} />
+      <Tabs.Screen name="ai-chat" options={{ href: null }} />
     </Tabs>
   );
 }

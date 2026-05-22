@@ -139,10 +139,11 @@ export default function AIChatScreen() {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        style={{ width: '100%' }}
       >
-        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === 'ios' ? 30 : 12 }]}>
           <TextInput
             style={[styles.input, { color: colors.foreground, backgroundColor: colors.background }]}
             placeholder="Pergunte algo sobre o ZeroRisco..."
