@@ -119,10 +119,11 @@ export default function AIChatScreen() {
       <Stack.Screen
         options={{
           title: 'ZeroRisco IA',
-          headerStyle: { backgroundColor: colors.background },
+          headerShown: true,
+          headerStyle: { backgroundColor: colors.card },
           headerTintColor: colors.foreground,
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 10 }}>
+            <TouchableOpacity onPress={() => router.back()} style={{ marginLeft: 16 }}>
               <Feather name="arrow-left" size={24} color={colors.foreground} />
             </TouchableOpacity>
           ),
@@ -139,11 +140,11 @@ export default function AIChatScreen() {
       />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}
         style={{ width: '100%' }}
       >
-        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === 'ios' ? 30 : 12 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: colors.card, borderTopColor: colors.border, paddingBottom: Platform.OS === 'ios' ? 40 : 24, paddingTop: 12 }]}>
           <TextInput
             style={[styles.input, { color: colors.foreground, backgroundColor: colors.background }]}
             placeholder="Pergunte algo sobre o ZeroRisco..."
