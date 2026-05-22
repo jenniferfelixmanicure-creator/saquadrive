@@ -164,6 +164,7 @@ export default function PassengerProfileScreen() {
           <Row icon="bell" label="Notificações" onPress={() => router.push("/(passenger)/notifications")} colors={colors} />
           <Row icon="shield" label="Segurança" onPress={() => router.push("/(passenger)/security")} colors={colors} />
           <Row icon="file-text" label="Upload de Documentos" onPress={() => router.push("/(passenger)/upload-documents")} colors={colors} />
+          <Row icon="message-square" label="Chat com ZeroRisco IA" onPress={() => router.push("/(passenger)/ai-chat")} colors={colors} />
           <Row icon="help-circle" label="Ajuda e suporte" onPress={() => router.push("/(passenger)/help-support")} colors={colors} />
         </View>
 
