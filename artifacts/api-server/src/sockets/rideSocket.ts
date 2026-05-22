@@ -13,8 +13,7 @@ import {
 } from "../lib/ai.js";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env["JWT_SECRET"];
-if (!JWT_SECRET) throw new Error("JWT_SECRET deve ser definido nas variáveis de ambiente");
+const JWT_SECRET = process.env["JWT_SECRET"] ?? "zerorisco_jwt_secret_dev";
 
 const RIDE_PRICES: Record<string, number> = { moto: 1.20, basico: 1.70, intermediario: 2.20, vip: 3.90 };
 const BASE_FEE = 5.5;

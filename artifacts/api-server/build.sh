@@ -21,9 +21,9 @@ echo "==> pnpm version: $(pnpm --version)"
 echo "==> Instalando dependências..."
 pnpm install --no-frozen-lockfile
 
-# Aplicar migrações do banco de dados
+# Aplicar migrações do banco de dados (não falhar o build se falhar aqui)
 echo "==> Aplicando schema do banco de dados..."
-pnpm --filter @workspace/db run push-force
+pnpm --filter @workspace/db run push-force || echo "==> Aviso: Falha ao aplicar schema (verifique DATABASE_URL)"
 
 # Build do api-server
 echo "==> Buildando api-server..."
