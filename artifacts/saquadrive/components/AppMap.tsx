@@ -20,13 +20,12 @@ type Props = {
 export default function AppMap({
   origin,
   destination,
-  originColor = "#FF6B00",
-  destColor = "#00C4FF",
+  originColor = "#00C4FF",
+  destColor = "#0A7AFF",
   routeCoordinates,
 }: Props) {
-  // Saquarema como fallback
   const center = origin ? [origin.lat, origin.lng] : [-22.9200, -42.5100];
-  
+
   const mapHtml = `
     <!DOCTYPE html>
     <html>
@@ -36,10 +35,12 @@ export default function AppMap({
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <style>
-          body { margin: 0; padding: 0; }
-          #map { height: 100vh; width: 100vw; background: #0D0D0D; }
-          .leaflet-container { background: #0D0D0D !important; }
-          .leaflet-tile-pane { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { background: #080C10; }
+          #map { height: 100vh; width: 100vw; background: #080C10; }
+          .leaflet-container { background: #080C10 !important; }
+          .leaflet-tile-pane { filter: brightness(0.7) saturate(0.5) hue-rotate(180deg) invert(1); }
+          .leaflet-control-attribution { display: none; }
         </style>
       </head>
       <body>
@@ -53,33 +54,42 @@ export default function AppMap({
 
           if (${!!origin}) {
             L.circleMarker([${origin?.lat}, ${origin?.lng}], {
-              color: 'white',
+              color: 'rgba(255,255,255,0.9)',
               fillColor: '${originColor}',
               fillOpacity: 1,
-              radius: 8,
-              weight: 2
+              radius: 9,
+              weight: 2.5
             }).addTo(map);
           }
 
           if (${!!destination}) {
-            L.circleMarker([${destination?.lat}, ${destination?.lng}], {
-              color: 'white',
-              fillColor: '${destColor}',
-              fillOpacity: 1,
-              radius: 8,
-              weight: 2
-            }).addTo(map);
+            var destIcon = L.divIcon({
+              className: '',
+              html: '<div style="width:20px;height:20px;border-radius:50%;background:${destColor};border:2.5px solid rgba(255,255,255,0.9);box-shadow:0 0 12px ${destColor}99;"></div>',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10],
+            });
+            L.marker([${destination?.lat}, ${destination?.lng}], { icon: destIcon }).addTo(map);
           }
           
           ${routeCoordinates && routeCoordinates.length > 0 ? `
             var routePoints = ${JSON.stringify(routeCoordinates.map(c => [c.latitude, c.longitude]))};
-            var polyline = L.polyline(routePoints, {
-              color: '${destColor}',
-              weight: 5,
-              opacity: 0.8,
-              lineJoin: 'round'
+            L.polyline(routePoints, {
+              color: '${originColor}',
+              weight: 4,
+              opacity: 0.9,
+              lineJoin: 'round',
+              lineCap: 'round'
             }).addTo(map);
-            map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+            L.polyline(routePoints, {
+              color: '${originColor}',
+              weight: 10,
+              opacity: 0.15,
+              lineJoin: 'round',
+              lineCap: 'round'
+            }).addTo(map);
+            var routeLine = L.polyline(routePoints);
+            map.fitBounds(routeLine.getBounds(), { padding: [60, 60] });
           ` : ''}
         </script>
       </body>
@@ -88,7 +98,7 @@ export default function AppMap({
 
   return (
     <View style={styles.container}>
-      <WebView 
+      <WebView
         originWhitelist={['*']}
         source={{ html: mapHtml }}
         style={styles.map}
@@ -100,6 +110,6 @@ export default function AppMap({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0D0D0D" },
+  container: { flex: 1, backgroundColor: "#080C10" },
   map: { flex: 1 },
 });

@@ -97,6 +97,8 @@ export default function DriverHomeScreen() {
   const [pinInput, setPinInput] = useState("");
   const [pinError, setPinError] = useState("");
   const [showNotApprovedModal, setShowNotApprovedModal] = useState(false);
+  const [requestCountdowns, setRequestCountdowns] = useState<Record<string, number>>({});
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [arrivedAt, setArrivedAt] = useState<Date | null>(null);
   const [waitSeconds, setWaitSeconds] = useState(0);
   const [waitFeeStarted, setWaitFeeStarted] = useState(false);
@@ -107,6 +109,26 @@ export default function DriverHomeScreen() {
   const [showMonitoringPopup, setShowMonitoringPopup] = useState(false);
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (requests.length === 0) {
+      if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
+      setRequestCountdowns({});
+      return;
+    }
+    if (countdownRef.current) return;
+    countdownRef.current = setInterval(() => {
+      setRequestCountdowns((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const id of Object.keys(next)) {
+          if (next[id] > 0) { next[id] -= 1; changed = true; }
+        }
+        return changed ? next : prev;
+      });
+    }, 1000);
+    return () => { if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; } };
+  }, [requests.length]);
 
   const WAIT_FREE_MINUTES = 2;
   const WAIT_FEE_PER_MIN = 0.30;
@@ -171,7 +193,7 @@ export default function DriverHomeScreen() {
       if (socket && connected && user && driverLocation) {
         socket.emit("driver:online", {
           driverId: user.id, name: user.name, car: user.vehicleModel ?? "Veículo",
-          color: "Prata", plate: user.vehiclePlate ?? "ABC-1234",
+          color: (user as any).vehicleColor ?? "Prata", plate: user.vehiclePlate ?? "ABC-1234",
           rating: user.driverRating ?? 4.9, photo: user.profilePhotoUrl ?? user.name.slice(0, 2).toUpperCase(), eta: 4,
           latitude: driverLocation.latitude, longitude: driverLocation.longitude,
           vehicleYear: user.vehicleYear, vehicleType: user.vehicleType ?? "car",
@@ -192,6 +214,7 @@ export default function DriverHomeScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       sendLocalNotification("🚕 Nova Corrida!", `${safeData.passenger} — ${safeData.distanceToPassenger ?? safeData.distance}`, safeData);
       setRequests((prev) => { const exists = prev.find((r) => r.rideId === safeData.rideId); return exists ? prev : [...prev, safeData]; });
+      setRequestCountdowns((prev) => ({ ...prev, [safeData.rideId]: 30 }));
     });
     socket.on("driver:ride_cancelled", ({ rideId }: { rideId: string }) => {
       setRequests((prev) => prev.filter((r) => r.rideId !== rideId));
@@ -394,6 +417,21 @@ export default function DriverHomeScreen() {
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Corridas disponíveis</Text>
             {requests.map((item) => (
               <View key={item.rideId} style={[styles.requestCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                {(() => {
+                  const countdown = requestCountdowns[item.rideId] ?? 30;
+                  const urgent = countdown <= 10;
+                  return (
+                    <View style={[styles.countdownBar, { backgroundColor: urgent ? "#FF3B3022" : colors.primary + "18", borderColor: urgent ? "#FF3B30" : colors.primary + "44" }]}>
+                      <Feather name="clock" size={12} color={urgent ? "#FF3B30" : colors.primary} />
+                      <Text style={[styles.countdownText, { color: urgent ? "#FF3B30" : colors.primary }]}>
+                        {countdown > 0 ? `Aceite em ${countdown}s` : "Expirado"}
+                      </Text>
+                      <View style={[styles.countdownTrack, { backgroundColor: colors.border }]}>
+                        <View style={[styles.countdownFill, { width: `${(countdown / 30) * 100}%`, backgroundColor: urgent ? "#FF3B30" : colors.primary }]} />
+                      </View>
+                    </View>
+                  );
+                })()}
                 <View style={styles.requestHeader}>
                   {item.passengerPhotoUrl ? (
                     <Image source={{ uri: item.passengerPhotoUrl }} style={[styles.avatar, { borderRadius: 22 }]} />
@@ -670,6 +708,10 @@ const styles = StyleSheet.create({
   panelDesc: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
   sectionTitle: { fontSize: 15, fontFamily: "Inter_700Bold", marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 },
   requestCard: { borderRadius: 14, borderWidth: 1, marginBottom: 10, overflow: "hidden" },
+  countdownBar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1 },
+  countdownText: { flex: 1, fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  countdownTrack: { width: 80, height: 4, borderRadius: 2, overflow: "hidden" },
+  countdownFill: { height: 4, borderRadius: 2 },
   requestHeader: { flexDirection: "row", alignItems: "center", padding: 14, gap: 10 },
   avatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   avatarText: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#fff" },

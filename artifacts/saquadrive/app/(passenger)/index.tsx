@@ -39,21 +39,12 @@ function AnimatedDots({ anim, color }: { anim: Animated.Value; color: string }) 
   );
 }
 
-function calculatePrice(distKm: number, type: RideType): { total: number; isPeakHour: boolean; surgeMultiplier: number } {
-  const prices: Record<RideType, number> = { moto: 1.20, basico: 1.70, intermediario: 2.20, vip: 3.90 };
-  const perKm = prices[type] ?? 1.70;
-  const hour = new Date().getHours();
-  const isPeak = (hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 19);
-  const surge = isPeak ? 1.5 : 1.0;
-  const raw = Math.round((5.5 + distKm * perKm) * surge * 100) / 100;
-  return { total: Math.max(raw, 10), isPeakHour: isPeak, surgeMultiplier: surge };
-}
-
 export default function PassengerHomeScreen() {
   const { user, token, apiFetch } = useAuth();
   const {
     rideStatus, currentRide, requestRide, cancelRide, rateDriver,
     resetRide, routeCoordinates, triggerSOS, driverRealtimeLocation, userLocation,
+    calculatePrice,
   } = useRide();
   const colors = useColors();
   const insets = useSafeAreaInsets();

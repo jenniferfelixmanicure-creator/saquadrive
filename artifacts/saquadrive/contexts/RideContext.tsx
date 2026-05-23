@@ -322,7 +322,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       distance: calculateDistance(finalDistance),
       duration: finalDuration,
       createdAt: new Date().toISOString(),
-      pin: Math.floor(1000 + Math.random() * 9000).toString(),
     };
 
     if (!socket || !connected) {
@@ -342,7 +341,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       distance: calculateDistance(finalDistance),
       distanceKm: finalDistance,
       duration: finalDuration,
-      pin: ride.pin,
     });
 
     const fallbackTimer = setTimeout(() => {

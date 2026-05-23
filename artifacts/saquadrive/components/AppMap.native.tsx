@@ -1,22 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
   import { StyleSheet, Text, View } from "react-native";
 
-  // Importações no nível do módulo — chamar require() dentro do corpo de um
-  // componente crasha no Android com New Architecture (TurboModules).
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const MapLibreGL = require("@maplibre/maplibre-react-native");
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { reverseGeocode } = require("@/lib/google-maps");
 
-  // MapLibre v11 renomeou os componentes em relação à v10:
-  //   MapView       → Map        (prop styleURL → mapStyle)
-  //   PointAnnotation → Marker
-  //   ShapeSource   → GeoJSONSource  (prop shape → data)
-  //   LineLayer     → Layer      (type="line", paint/layout em vez de style)
-  //   Camera: center/zoom no lugar de centerCoordinate/zoomLevel
-  //   Camera imperative: flyTo({ center, zoom, duration }) e fitBounds({ sw, ne }, { duration })
-
-  const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+  const STYLE_URL = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
   type LatLng = { lat: number; lng: number };
 
@@ -37,7 +25,7 @@ import React, { useEffect, useRef, useState } from "react";
   function MapLibreMap(props: Props) {
     const {
       origin, destination,
-      originColor = "#FF6B00", destColor = "#00C4FF",
+      originColor = "#00C4FF", destColor = "#0A7AFF",
       routeCoordinates, driverRealtimeLocation, onMapPress, onCenterChange,
     } = props;
 
@@ -55,22 +43,20 @@ import React, { useEffect, useRef, useState } from "react";
         if (routeCoordinates && routeCoordinates.length > 1) {
           const lons = routeCoordinates.map((c) => c.longitude);
           const lats = routeCoordinates.map((c) => c.latitude);
-          // v11: fitBounds(ne, sw, padding, duration) — argumentos posicionais
           cameraRef.current.fitBounds(
             [Math.max(...lons), Math.max(...lats)],
             [Math.min(...lons), Math.min(...lats)],
-            50,
+            60,
             500
           );
         } else if (origin && destination) {
           cameraRef.current.fitBounds(
             [Math.max(origin.lng, destination.lng), Math.max(origin.lat, destination.lat)],
             [Math.min(origin.lng, destination.lng), Math.min(origin.lat, destination.lat)],
-            50,
+            60,
             500
           );
         } else if (driverRealtimeLocation) {
-          // v11: flyTo(coordinates, duration)
           cameraRef.current.flyTo(
             [driverRealtimeLocation.longitude, driverRealtimeLocation.latitude],
             500
@@ -116,13 +102,9 @@ import React, { useEffect, useRef, useState } from "react";
       } catch {}
     }
 
-    // v11: MapLibreGL.Map, prop mapStyle (era styleURL)
     const MapView = MapLibreGL.Map;
-    // v11: Marker (era PointAnnotation)
     const Marker = MapLibreGL.Marker;
-    // v11: GeoJSONSource (era ShapeSource)
     const GeoJSONSource = MapLibreGL.GeoJSONSource;
-    // v11: Layer com type="line" (era LineLayer)
     const Layer = MapLibreGL.Layer;
     const Camera = MapLibreGL.Camera;
     const UserLocation = MapLibreGL.UserLocation;
@@ -135,19 +117,17 @@ import React, { useEffect, useRef, useState } from "react";
           onPress={onMapPress ? handleMapPress : undefined}
           onRegionDidChange={onCenterChange ? handleRegionDidChange : undefined}
         >
-          {/* v11 Camera: center/zoom em vez de centerCoordinate/zoomLevel */}
           <Camera
             ref={cameraRef}
             center={center}
             zoom={14}
           />
 
-          {/* Ponto azul da localização atual do usuário (GPS nativo) */}
           <UserLocation visible={true} />
 
           {origin && (
             <Marker id="origin" coordinate={[origin.lng, origin.lat]}>
-              <View style={[styles.markerOuter, { borderColor: "white" }]}>
+              <View style={[styles.markerOuter, { borderColor: "rgba(255,255,255,0.9)" }]}>
                 <View style={[styles.markerInner, { backgroundColor: originColor }]} />
               </View>
             </Marker>
@@ -155,8 +135,9 @@ import React, { useEffect, useRef, useState } from "react";
 
           {destination && (
             <Marker id="destination" coordinate={[destination.lng, destination.lat]}>
-              <View style={[styles.markerOuter, { borderColor: "white" }]}>
-                <View style={[styles.markerInner, { backgroundColor: destColor }]} />
+              <View style={styles.destMarkerOuter}>
+                <View style={[styles.destMarkerPin, { backgroundColor: destColor }]} />
+                <View style={[styles.destMarkerTip, { borderTopColor: destColor }]} />
               </View>
             </Marker>
           )}
@@ -173,16 +154,28 @@ import React, { useEffect, useRef, useState } from "react";
           )}
 
           {routeGeoJSON && (
-            // v11: GeoJSONSource (era ShapeSource) + prop data (era shape)
             <GeoJSONSource id="route" data={routeGeoJSON}>
-              {/* v11: Layer type="line" com paint/layout (era LineLayer com style) */}
+              <Layer
+                id="routeLineShadow"
+                type="line"
+                paint={{
+                  "line-color": "#000000",
+                  "line-width": 8,
+                  "line-opacity": 0.3,
+                  "line-blur": 4,
+                }}
+                layout={{
+                  "line-cap": "round",
+                  "line-join": "round",
+                }}
+              />
               <Layer
                 id="routeLine"
                 type="line"
                 paint={{
-                  "line-color": destColor,
+                  "line-color": originColor,
                   "line-width": 4,
-                  "line-opacity": 0.85,
+                  "line-opacity": 0.95,
                 }}
                 layout={{
                   "line-cap": "round",
@@ -236,7 +229,7 @@ import React, { useEffect, useRef, useState } from "react";
   }
 
   const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#0D0D0D" },
+    container: { flex: 1, backgroundColor: "#080C10" },
     map: { flex: 1 },
     fallback: { alignItems: "center", justifyContent: "center", gap: 8 },
     fallbackText: { fontSize: 48 },
@@ -247,17 +240,32 @@ import React, { useEffect, useRef, useState } from "react";
     markerOuter: {
       width: 22, height: 22, borderRadius: 11, borderWidth: 2.5,
       alignItems: "center", justifyContent: "center",
-      backgroundColor: "white",
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.35, shadowRadius: 4, elevation: 5,
+      backgroundColor: "rgba(255,255,255,0.95)",
+      shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.8, shadowRadius: 8, elevation: 8,
     },
     markerInner: { width: 11, height: 11, borderRadius: 5.5 },
-    driverMarker: {
-      width: 36, height: 36, borderRadius: 18, backgroundColor: "white",
+    destMarkerOuter: { alignItems: "center" },
+    destMarkerPin: {
+      width: 30, height: 30, borderRadius: 15,
       alignItems: "center", justifyContent: "center",
-      shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3, shadowRadius: 4, elevation: 5,
+      shadowColor: "#0A7AFF", shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.9, shadowRadius: 10, elevation: 10,
+      borderWidth: 2.5, borderColor: "rgba(255,255,255,0.9)",
     },
-    driverEmoji: { fontSize: 20 },
+    destMarkerTip: {
+      width: 0, height: 0,
+      borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 8,
+      borderLeftColor: "transparent", borderRightColor: "transparent",
+      marginTop: -1,
+    },
+    driverMarker: {
+      width: 40, height: 40, borderRadius: 20,
+      backgroundColor: "rgba(255,255,255,0.1)",
+      borderWidth: 1.5, borderColor: "rgba(255,255,255,0.3)",
+      alignItems: "center", justifyContent: "center",
+      shadowColor: "#00C4FF", shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.5, shadowRadius: 8, elevation: 8,
+    },
+    driverEmoji: { fontSize: 22 },
   });
-  

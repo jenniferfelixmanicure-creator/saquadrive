@@ -16,7 +16,7 @@ export default function DriverLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.accent,
+        tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.mutedForeground,
         headerShown: false,
         tabBarStyle: {
@@ -59,19 +59,13 @@ export default function DriverLayout() {
         }}
       />
       <Tabs.Screen
-        name="earnings"
-        options={{
-          title: "Ganhos",
-          tabBarIcon: ({ color }) => <Feather name="dollar-sign" size={22} color={color} />,
-        }}
-      />
-      <Tabs.Screen
         name="profile"
         options={{
           title: "Perfil",
           tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
+      <Tabs.Screen name="earnings" options={{ href: null }} />
       <Tabs.Screen name="bank-data" options={{ href: null }} />
       <Tabs.Screen name="edit-profile" options={{ href: null }} />
       <Tabs.Screen name="goals" options={{ href: null }} />

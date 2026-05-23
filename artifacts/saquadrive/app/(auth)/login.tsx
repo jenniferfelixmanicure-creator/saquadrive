@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
@@ -35,6 +36,7 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -74,6 +76,7 @@ export default function LoginScreen() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao fazer login. Tente novamente.";
       setError(msg);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
@@ -86,12 +89,16 @@ export default function LoginScreen() {
     >
       <View style={[styles.inner, { paddingTop: topPad + 24, paddingBottom: botPad + 24 }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={[styles.backArrow, { color: colors.primary }]}>←</Text>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={[styles.backBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+            activeOpacity={0.7}
+          >
+            <Feather name="chevron-left" size={22} color={colors.foreground} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: colors.foreground }]}>Entrar</Text>
           <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
-            Bem-vindo de volta ao Zerorisco
+            Bem-vindo de volta ao ZeroRisco
           </Text>
         </View>
 
@@ -112,28 +119,46 @@ export default function LoginScreen() {
 
           <View style={[styles.inputWrapper, { backgroundColor: colors.input, borderColor: colors.border }]}>
             <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Senha</Text>
-            <TextInput
-              style={[styles.input, { color: colors.foreground }]}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={colors.mutedForeground}
-              secureTextEntry
-            />
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={[styles.input, { color: colors.foreground, flex: 1 }]}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={colors.mutedForeground}
+                secureTextEntry={!showPassword}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+              >
+                <Feather
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={18}
+                  color={colors.mutedForeground}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {error ? (
-            <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text>
+            <View style={[styles.errorBox, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive + "44" }]}>
+              <Feather name="alert-circle" size={14} color={colors.destructive} />
+              <Text style={[styles.error, { color: colors.destructive }]}>{error}</Text>
+            </View>
           ) : null}
 
           <TouchableOpacity
-            style={[styles.loginBtn, { backgroundColor: colors.primary }]}
+            style={[styles.loginBtn, { backgroundColor: colors.primary, opacity: loading ? 0.85 : 1 }]}
             onPress={handleLogin}
             disabled={loading}
             activeOpacity={0.85}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#000" />
             ) : (
               <Text style={[styles.loginBtnText, { color: colors.primaryForeground }]}>
                 Entrar
@@ -178,8 +203,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   inner: { flex: 1, paddingHorizontal: 24 },
   header: { marginBottom: 40 },
-  backBtn: { marginBottom: 24 },
-  backArrow: { fontSize: 28 },
+  backBtn: {
+    marginBottom: 28,
+    width: 40, height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   title: {
     fontSize: 32,
     fontFamily: "Inter_700Bold",
@@ -192,7 +223,7 @@ const styles = StyleSheet.create({
   },
   form: { gap: 16 },
   inputWrapper: {
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -209,10 +240,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Inter_400Regular",
   },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   error: {
+    flex: 1,
     fontSize: 13,
     fontFamily: "Inter_400Regular",
-    textAlign: "center",
   },
   loginBtn: {
     borderRadius: 14,
