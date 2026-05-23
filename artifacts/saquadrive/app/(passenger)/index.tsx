@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState, useCallback } from "react";
@@ -18,12 +18,12 @@ import AIMonitoringPopup from "@/components/AIMonitoringPopup";
 import { searchPlaces, getPlaceDetails, getRoute } from "@/lib/google-maps";
 import { API_URL } from "@/constants/api";
 
-type RideOption = { type: RideType; label: string; desc: string };
+type RideOption = { type: RideType; label: string; desc: string; icon: string };
 const RIDE_OPTIONS: RideOption[] = [
-  { type: "moto", label: "Moto", desc: "Viagem de moto" },
-  { type: "basico", label: "Básico", desc: "Carros 2005–2010" },
-  { type: "intermediario", label: "Intermediário", desc: "Carros 2011–2019" },
-  { type: "vip", label: "VIP", desc: "Carros 2020–2026" },
+  { type: "moto", label: "ZeroFlash", desc: "Rápido e econômico", icon: "motorbike" },
+  { type: "basico", label: "ZeroRisk", desc: "Conforto no dia a dia", icon: "car-hatchback" },
+  { type: "intermediario", label: "ZeroPlus", desc: "Mais espaço e conforto", icon: "car-side" },
+  { type: "vip", label: "ZeroGold", desc: "Experiência premium", icon: "car-sports" },
 ];
 
 type Phase = "idle" | "typing" | "confirming" | "finding" | "driver_coming" | "in_progress" | "rating";
@@ -454,97 +454,96 @@ export default function PassengerHomeScreen() {
 
         {phase === "confirming" && destination && (
           <ScrollView showsVerticalScrollIndicator={false}>
-            <View style={styles.routeInfo}>
-              <View style={[styles.routeRow, { borderBottomColor: colors.border }]}>
-                <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
-                <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>{origin.address}</Text>
-              </View>
-              <View style={styles.routeRow}>
-                <View style={[styles.routeDot, { backgroundColor: colors.accent }]} />
-                <Text style={[styles.routeText, { color: colors.foreground }]} numberOfLines={1}>{destination.address}</Text>
+            {/* Sheet header */}
+            <View style={styles.confirmHeader}>
+              <Text style={[styles.confirmTitle, { color: colors.foreground }]}>Para onde vamos?</Text>
+              <View style={[styles.nowBadge, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <Feather name="clock" size={12} color={colors.mutedForeground} />
+                <Text style={[styles.nowBadgeText, { color: colors.mutedForeground }]}>Agora</Text>
+                <Feather name="chevron-down" size={12} color={colors.mutedForeground} />
               </View>
             </View>
 
+            <Text style={[styles.chooseLabel, { color: colors.mutedForeground }]}>Escolha uma categoria</Text>
+
+            {/* Route info compact */}
+            <View style={[styles.routeCompact, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <View style={[styles.routeDot, { backgroundColor: colors.primary }]} />
+              <Text style={[styles.routeTextCompact, { color: colors.mutedForeground }]} numberOfLines={1}>{origin.address}</Text>
+              <Feather name="arrow-right" size={13} color={colors.mutedForeground} />
+              <View style={[styles.routeDot, { backgroundColor: colors.accent }]} />
+              <Text style={[styles.routeTextCompact, { color: colors.foreground }]} numberOfLines={1}>{destination.address}</Text>
+            </View>
+
             {priceInfo.isPeakHour && (
-              <View style={{ backgroundColor: "#FF6B0015", borderColor: "#FF6B00", borderWidth: 1, borderRadius: 10, padding: 10, marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Text style={{ fontSize: 18 }}>⚡</Text>
+              <View style={{ backgroundColor: "#FF6B0015", borderColor: "#FF6B00", borderWidth: 1, borderRadius: 10, padding: 10, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ fontSize: 16 }}>⚡</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: "#FF6B00", fontFamily: "Inter_700Bold", fontSize: 13 }}>Tarifa de hora de pico ativa</Text>
-                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 11 }}>Alta demanda · multiplicador 1.5x</Text>
+                  <Text style={{ color: "#FF6B00", fontFamily: "Inter_700Bold", fontSize: 12 }}>Hora de pico · 1.5x</Text>
+                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 10 }}>Alta demanda na região</Text>
                 </View>
               </View>
             )}
 
-            <Text style={[styles.sheetTitle, { color: colors.foreground, marginTop: 12 }]}>Escolha o tipo</Text>
-            {RIDE_OPTIONS.map((opt) => {
-              const { total: optPrice, isPeakHour } = calculatePrice(distKm, opt.type);
-              const discounted = getDiscountedPrice(optPrice);
-              const selected = selectedRideType === opt.type;
-              return (
-                <TouchableOpacity key={opt.type}
-                  style={[styles.rideOption, { backgroundColor: selected ? colors.primary : colors.muted, borderColor: selected ? colors.primary : colors.border }]}
-                  onPress={() => { setSelectedRideType(opt.type); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} activeOpacity={0.8}>
-                  <View style={styles.rideOptionLeft}>
-                    <Feather name="navigation" size={20} color={selected ? "#fff" : colors.foreground} />
-                    <View>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                        <Text style={[styles.rideLabel, { color: selected ? "#fff" : colors.foreground }]}>{opt.label}</Text>
-                        {isPeakHour && <View style={{ backgroundColor: "#FF6B00", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}><Text style={{ fontSize: 9, color: "#fff", fontFamily: "Inter_700Bold" }}>⚡ 1.5x</Text></View>}
+            {/* Vehicle category grid */}
+            <View style={styles.categoryGrid}>
+              {RIDE_OPTIONS.map((opt) => {
+                const { total: optPrice } = calculatePrice(distKm, opt.type);
+                const selected = selectedRideType === opt.type;
+                return (
+                  <TouchableOpacity
+                    key={opt.type}
+                    style={[styles.categoryCard, {
+                      backgroundColor: selected ? colors.primary : colors.muted,
+                      borderColor: selected ? colors.primary : colors.border,
+                    }]}
+                    onPress={() => { setSelectedRideType(opt.type); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    activeOpacity={0.8}
+                  >
+                    {selected && (
+                      <View style={styles.categoryCheck}>
+                        <Feather name="check" size={10} color={colors.primary} />
                       </View>
-                      <Text style={[styles.rideDesc, { color: selected ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>{opt.desc}</Text>
-                    </View>
-                  </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    {promoCode && discounted < optPrice ? (
-                      <>
-                        <Text style={[styles.ridePrice, { color: selected ? "rgba(255,255,255,0.5)" : colors.mutedForeground, textDecorationLine: "line-through", fontSize: 12 }]}>R$ {optPrice.toFixed(2)}</Text>
-                        <Text style={[styles.ridePrice, { color: selected ? "#fff" : "#34C759" }]}>R$ {discounted.toFixed(2)}</Text>
-                      </>
-                    ) : (
-                      <Text style={[styles.ridePrice, { color: selected ? "#fff" : colors.foreground }]}>R$ {optPrice.toFixed(2)}</Text>
                     )}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-
-            {/* Promo code */}
-            <View style={[styles.promoBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              {promoCode ? (
-                <View style={styles.promoApplied}>
-                  <Feather name="tag" size={16} color="#34C759" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.promoAppliedText, { color: "#34C759" }]}>{promoCode} aplicado!</Text>
-                    {promoDesc ? <Text style={[styles.promoAppliedDesc, { color: colors.mutedForeground }]}>{promoDesc}</Text> : null}
-                  </View>
-                  <TouchableOpacity onPress={clearPromo} style={[styles.promoRemoveBtn, { borderColor: colors.border }]}>
-                    <Feather name="x" size={14} color={colors.mutedForeground} />
+                    <MaterialCommunityIcons
+                      name={opt.icon as any}
+                      size={opt.type === "moto" ? 36 : 42}
+                      color={selected ? "#fff" : colors.foreground}
+                    />
+                    <Text style={[styles.categoryLabel, { color: selected ? "#fff" : colors.foreground }]}>{opt.label}</Text>
+                    <Text style={[styles.categoryDesc, { color: selected ? "rgba(255,255,255,0.7)" : colors.mutedForeground }]}>{opt.desc}</Text>
+                    {selected && (
+                      <Text style={styles.categoryPrice}>R$ {optPrice.toFixed(2)}</Text>
+                    )}
                   </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  <Text style={[styles.promoLabel, { color: colors.mutedForeground }]}>Código promocional</Text>
-                  <View style={styles.promoInputRow}>
-                    <TextInput style={[styles.promoInput, { color: colors.foreground, borderColor: promoError ? "#FF3B30" : colors.border }]}
-                      value={promoInput} onChangeText={(t) => { setPromoInput(t); setPromoError(""); }}
-                      placeholder="Digite o código" placeholderTextColor={colors.mutedForeground}
-                      autoCapitalize="characters" returnKeyType="done" onSubmitEditing={validatePromo} />
-                    <TouchableOpacity style={[styles.promoValidateBtn, { backgroundColor: colors.primary, opacity: promoLoading ? 0.7 : 1 }]} onPress={validatePromo} disabled={promoLoading} activeOpacity={0.85}>
-                      <Text style={styles.promoValidateText}>{promoLoading ? "..." : "OK"}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {!!promoError && <Text style={styles.promoError}>{promoError}</Text>}
-                </>
-              )}
+                );
+              })}
             </View>
 
+            {/* Confirm button */}
             <TouchableOpacity style={[styles.requestBtn, { backgroundColor: colors.primary }]} onPress={handleRequestRide} activeOpacity={0.85}>
               <Text style={styles.requestBtnText}>
-                Solicitar — R$ {getDiscountedPrice(priceInfo.total).toFixed(2)}
-                {promoCode ? " (com desconto)" : ""}
+                Confirmar ZeroRisco — R$ {priceInfo.total.toFixed(2)}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.muted, marginTop: 10 }]} onPress={handleCancel} activeOpacity={0.8}>
+
+            {/* Trust footer */}
+            <View style={styles.trustRow}>
+              <View style={styles.trustItem}>
+                <Feather name="shield" size={11} color={colors.mutedForeground} />
+                <Text style={[styles.trustText, { color: colors.mutedForeground }]}>Motoristas verificados</Text>
+              </View>
+              <View style={styles.trustItem}>
+                <Feather name="headphones" size={11} color={colors.mutedForeground} />
+                <Text style={[styles.trustText, { color: colors.mutedForeground }]}>Suporte 24/7</Text>
+              </View>
+              <View style={styles.trustItem}>
+                <Feather name="check-circle" size={11} color={colors.mutedForeground} />
+                <Text style={[styles.trustText, { color: colors.mutedForeground }]}>Seguro incluso</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.muted, marginTop: 8 }]} onPress={handleCancel} activeOpacity={0.8}>
               <Text style={[styles.cancelBtnText, { color: colors.foreground }]}>Cancelar</Text>
             </TouchableOpacity>
           </ScrollView>
@@ -709,22 +708,27 @@ const styles = StyleSheet.create({
   routeRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1 },
   routeDot: { width: 10, height: 10, borderRadius: 5 },
   routeText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  routeCompact: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 12 },
+  routeTextCompact: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular" },
+  confirmHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  confirmTitle: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  nowBadge: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 20, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 6 },
+  nowBadgeText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  chooseLabel: { fontSize: 13, fontFamily: "Inter_400Regular", marginBottom: 12 },
+  categoryGrid: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  categoryCard: { flex: 1, borderRadius: 14, borderWidth: 1.5, paddingVertical: 12, paddingHorizontal: 6, alignItems: "center", gap: 4, position: "relative", minHeight: 120 },
+  categoryCheck: { position: "absolute", top: 7, right: 7, width: 18, height: 18, borderRadius: 9, backgroundColor: "#fff", alignItems: "center", justifyContent: "center" },
+  categoryLabel: { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center" },
+  categoryDesc: { fontSize: 9, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 13 },
+  categoryPrice: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#fff", marginTop: 2 },
+  trustRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 14, marginBottom: 4 },
+  trustItem: { flexDirection: "row", alignItems: "center", gap: 4 },
+  trustText: { fontSize: 9, fontFamily: "Inter_400Regular" },
   rideOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 10 },
   rideOptionLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   rideLabel: { fontSize: 15, fontFamily: "Inter_700Bold" },
   rideDesc: { fontSize: 12, fontFamily: "Inter_400Regular" },
   ridePrice: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  promoBox: { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 12, gap: 10 },
-  promoLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
-  promoInputRow: { flexDirection: "row", gap: 8 },
-  promoInput: { flex: 1, height: 44, borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  promoValidateBtn: { height: 44, paddingHorizontal: 18, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  promoValidateText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#fff" },
-  promoError: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#FF3B30" },
-  promoApplied: { flexDirection: "row", alignItems: "center", gap: 10 },
-  promoAppliedText: { fontSize: 14, fontFamily: "Inter_700Bold" },
-  promoAppliedDesc: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  promoRemoveBtn: { width: 32, height: 32, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   requestBtn: { height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 8 },
   requestBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
   cancelBtn: { flexDirection: "row", gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, alignItems: "center", justifyContent: "center" },
