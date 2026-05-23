@@ -5,7 +5,6 @@ import {
   Animated,
   Dimensions,
   Easing,
-  ImageBackground,
   Platform,
   StyleSheet,
   Text,
@@ -105,16 +104,9 @@ export default function AppSplash() {
   });
 
   return (
-    // ImageBackground com a mesma imagem da splash nativa, resizeMode="cover"
-    // garante que ocupe 100% da tela em qualquer resolução/Android 12+
-    <ImageBackground
-      source={require("../assets/images/splash.png")}
-      style={styles.container}
-      resizeMode="cover"
-    >
-      {/* Overlay escuro para manter legibilidade sobre a imagem */}
+    <View style={[styles.container, { backgroundColor: "#0D0D0D" }]}>
       <LinearGradient
-        colors={["rgba(10,10,18,0.72)", "rgba(13,13,26,0.80)", "rgba(13,13,13,0.85)"]}
+        colors={["#0D0D1A", "#0D0D0D", "#080810"]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -162,7 +154,7 @@ export default function AppSplash() {
 
         <Text style={styles.loadingLabel}>Carregando...</Text>
       </View>
-    </ImageBackground>
+    </View>
   );
 }
 
