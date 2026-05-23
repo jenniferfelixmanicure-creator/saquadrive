@@ -160,8 +160,8 @@ export default function PassengerHomeScreen() {
     if (phase === "idle" && user?.isApproved) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(neonPulseAnim, { toValue: 1, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
-          Animated.timing(neonPulseAnim, { toValue: 0, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
+          Animated.timing(neonPulseAnim, { toValue: 1, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+          Animated.timing(neonPulseAnim, { toValue: 0, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
         ])
       ).start();
       Animated.loop(
