@@ -29,14 +29,17 @@ REGRAS DE RESPOSTA:
 3. Emergências: Se o usuário relatar perigo imediato, instrua-o a usar o botão SOS no app e ligar para a polícia (190).
 4. Suporte Humano: Para casos financeiros complexos ou reclamações graves, informe que você pode encaminhar o ticket para a equipe humana.`;
 
+const GROK_MODEL = "grok-2-1212";
+
 async function callAI(systemPrompt: string, userPrompt: string, temperature = 0.7): Promise<string> {
   const response = await client.chat.completions.create({
-    model: "grok-beta",
+    model: GROK_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
     temperature,
+    max_tokens: 1024,
   });
   return response.choices[0].message.content ?? "";
 }
@@ -56,11 +59,21 @@ export async function askZeroRiscoIA(prompt: string, context = ""): Promise<stri
   try {
     return await callAI(
       ZERISCO_SYSTEM_PROMPT,
-      `Contexto: ${context}\n\nPergunta: ${prompt}`
+      context ? `Contexto: ${context}\n\nPergunta: ${prompt}` : prompt
     );
-  } catch (error) {
-    logger.error({ error }, "ZeroRisco IA — erro no assistente");
-    return "Estou processando algumas informações. Posso te ajudar com outra coisa?";
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    logger.error({ error, model: GROK_MODEL, msg }, "ZeroRisco IA — erro no assistente");
+    if (msg.includes("model") || msg.includes("404") || msg.includes("not found")) {
+      return "Modelo IA temporariamente indisponível. A equipe ZeroRisco foi notificada.";
+    }
+    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("auth")) {
+      return "Chave de acesso IA inválida. Contate o suporte ZeroRisco.";
+    }
+    if (msg.includes("429") || msg.includes("rate") || msg.includes("limit")) {
+      return "Muitas perguntas em pouco tempo. Aguarde alguns segundos e tente novamente.";
+    }
+    return "Não consegui processar sua mensagem agora. Tente novamente em instantes.";
   }
 }
 
