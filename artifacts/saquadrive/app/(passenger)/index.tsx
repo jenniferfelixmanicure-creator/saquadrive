@@ -95,6 +95,9 @@ export default function PassengerHomeScreen() {
   const ring2Anim = useRef(new Animated.Value(0)).current;
   const ring3Anim = useRef(new Animated.Value(0)).current;
   const dotsAnim = useRef(new Animated.Value(0)).current;
+  const neonPulseAnim = useRef(new Animated.Value(0)).current;
+  const scanAnim = useRef(new Animated.Value(0)).current;
+  const shieldScaleAnim = useRef(new Animated.Value(1)).current;
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -151,6 +154,36 @@ export default function PassengerHomeScreen() {
       socket.off("passenger:wait_fee_charged");
     };
   }, [socket, chatOpen]);
+
+  // Neon security banner animation (idle)
+  useEffect(() => {
+    if (phase === "idle" && user?.isApproved) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(neonPulseAnim, { toValue: 1, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
+          Animated.timing(neonPulseAnim, { toValue: 0, duration: 1600, useNativeDriver: true, easing: Easing.inOut(Easing.sine) }),
+        ])
+      ).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(scanAnim, { toValue: 1, duration: 2400, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+          Animated.delay(600),
+          Animated.timing(scanAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          Animated.delay(400),
+        ])
+      ).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(shieldScaleAnim, { toValue: 1.06, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+          Animated.timing(shieldScaleAnim, { toValue: 1, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        ])
+      ).start();
+    } else {
+      neonPulseAnim.stopAnimation(); neonPulseAnim.setValue(0);
+      scanAnim.stopAnimation(); scanAnim.setValue(0);
+      shieldScaleAnim.stopAnimation(); shieldScaleAnim.setValue(1);
+    }
+  }, [phase, user?.isApproved]);
 
   // Radar animation
   useEffect(() => {
@@ -365,13 +398,68 @@ export default function PassengerHomeScreen() {
           </View>
         )}
 
-        {phase === "idle" && user?.isApproved && (
-          <View style={styles.emptyState}>
-            <Feather name="map-pin" size={32} color={colors.mutedForeground} />
-            <Text style={[styles.emptyStateTitle, { color: colors.foreground }]}>Para onde vamos?</Text>
-            <Text style={[styles.emptyStateDesc, { color: colors.mutedForeground }]}>Busque seu destino acima ou toque no mapa</Text>
-          </View>
-        )}
+        {phase === "idle" && user?.isApproved && (() => {
+          const neonGlow = neonPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
+          const neonRingScale = neonPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+          const neonRingOpacity = neonPulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.15, 0.45, 0.15] });
+          const scanTranslate = scanAnim.interpolate({ inputRange: [0, 1], outputRange: [-90, 90] });
+          return (
+            <View style={styles.neonBanner}>
+              {/* Logo */}
+              <Image
+                source={require("@/assets/images/zerorisco_logo_futuristic.png")}
+                style={styles.neonLogo}
+                resizeMode="contain"
+              />
+
+              {/* Shield core with neon ring */}
+              <View style={styles.neonShieldWrapper}>
+                <Animated.View style={[styles.neonRing, {
+                  opacity: neonRingOpacity,
+                  transform: [{ scale: neonRingScale }],
+                }]} />
+                <Animated.View style={[styles.neonShieldOuter, {
+                  transform: [{ scale: shieldScaleAnim }],
+                  shadowOpacity: neonGlow as unknown as number,
+                }]}>
+                  <View style={styles.neonShieldInner}>
+                    <Feather name="shield" size={28} color="#00FF88" />
+                  </View>
+                </Animated.View>
+
+                {/* Scan line */}
+                <View style={styles.neonScanClip} pointerEvents="none">
+                  <Animated.View style={[styles.neonScanLine, { transform: [{ translateY: scanTranslate }] }]} />
+                </View>
+              </View>
+
+              {/* Status text */}
+              <Animated.Text style={[styles.neonMonitoringText, { opacity: neonGlow as unknown as number }]}>
+                ● MONITORANDO
+              </Animated.Text>
+              <Text style={styles.neonSubText}>ZeroRisco IA ativa · Sistema operacional</Text>
+
+              {/* Status chips */}
+              <View style={styles.neonChipsRow}>
+                {[
+                  { icon: "cpu" as const, label: "IA Ativa" },
+                  { icon: "map-pin" as const, label: "GPS Seguro" },
+                  { icon: "lock" as const, label: "Criptografado" },
+                ].map((chip) => (
+                  <View key={chip.label} style={styles.neonChip}>
+                    <Feather name={chip.icon} size={11} color="#00FF88" />
+                    <Text style={styles.neonChipText}>{chip.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* CTA */}
+              <Text style={[styles.neonCtaText, { color: colors.mutedForeground }]}>
+                Busque seu destino acima para começar
+              </Text>
+            </View>
+          );
+        })()}
 
         {phase === "confirming" && destination && (
           <ScrollView showsVerticalScrollIndicator={false}>
@@ -701,4 +789,111 @@ const styles = StyleSheet.create({
   suspendedContact: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
   suspendedDismiss: { height: 46, paddingHorizontal: 32, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center", marginTop: 8 },
   suspendedDismissText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  neonBanner: {
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 10,
+    overflow: "hidden",
+  },
+  neonLogo: {
+    width: 140,
+    height: 36,
+    marginBottom: 4,
+  },
+  neonShieldWrapper: {
+    width: 90,
+    height: 90,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  neonRing: {
+    position: "absolute",
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 2,
+    borderColor: "#00FF88",
+  },
+  neonShieldOuter: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(0,255,136,0.08)",
+    borderWidth: 1.5,
+    borderColor: "rgba(0,255,136,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#00FF88",
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 18,
+    elevation: 12,
+  },
+  neonShieldInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(0,255,136,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  neonScanClip: {
+    position: "absolute",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: "hidden",
+    pointerEvents: "none",
+  },
+  neonScanLine: {
+    width: "100%",
+    height: 2,
+    backgroundColor: "rgba(0,255,136,0.6)",
+    shadowColor: "#00FF88",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 6,
+  },
+  neonMonitoringText: {
+    fontSize: 13,
+    fontFamily: "Inter_700Bold",
+    color: "#00FF88",
+    letterSpacing: 3,
+    textShadowColor: "#00FF88",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+  neonSubText: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    color: "rgba(0,255,136,0.5)",
+    letterSpacing: 0.5,
+  },
+  neonChipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 2,
+  },
+  neonChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(0,255,136,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(0,255,136,0.25)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  neonChipText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    color: "rgba(0,255,136,0.8)",
+    letterSpacing: 0.3,
+  },
+  neonCtaText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    marginTop: 2,
+  },
 });
