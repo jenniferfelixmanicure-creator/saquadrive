@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, lt, and } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { ridesTable, usersTable, promoCodesTable, ratingsTable } from "@workspace/db";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate.js";
@@ -8,6 +8,14 @@ const router = Router();
 
 router.get("/rides/history", authenticate, async (req: AuthRequest, res) => {
   try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const cursor = req.query.cursor as string | undefined;
+
+    const conditions = [eq(ridesTable.passengerId, req.user!.userId)];
+    if (cursor) {
+      conditions.push(lt(ridesTable.createdAt, new Date(cursor)));
+    }
+
     const rows = await db.select({
       id: ridesTable.id,
       originAddress: ridesTable.originAddress,
@@ -33,40 +41,57 @@ router.get("/rides/history", authenticate, async (req: AuthRequest, res) => {
       vehicleColor: usersTable.vehicleColor,
     }).from(ridesTable)
       .leftJoin(usersTable, eq(ridesTable.driverId, usersTable.id))
-      .where(eq(ridesTable.passengerId, req.user!.userId))
-      .orderBy(desc(ridesTable.createdAt)).limit(50);
+      .where(and(...conditions))
+      .orderBy(desc(ridesTable.createdAt))
+      .limit(limit + 1);
 
-    res.json(rows.map(r => ({
-      id: r.id,
-      originAddress: r.originAddress,
-      originLat: r.originLat,
-      originLng: r.originLng,
-      destAddress: r.destAddress,
-      destLat: r.destLat,
-      destLng: r.destLng,
-      rideType: r.rideType,
-      price: r.price,
-      status: r.status,
-      distance: r.distance,
-      duration: r.duration,
-      waitTimeFee: r.waitTimeFee,
-      promoCode: r.promoCode,
-      promoDiscount: r.promoDiscount,
-      createdAt: r.createdAt,
-      completedAt: r.completedAt,
-      driver: r.driverName ? {
-        name: r.driverName,
-        rating: r.driverRating,
-        vehicleModel: r.vehicleModel,
-        vehiclePlate: r.vehiclePlate,
-        vehicleColor: r.vehicleColor ?? null,
-      } : null,
-    })));
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const nextCursor = hasMore ? items[items.length - 1].createdAt?.toISOString() : null;
+
+    res.json({
+      items: items.map(r => ({
+        id: r.id,
+        originAddress: r.originAddress,
+        originLat: r.originLat,
+        originLng: r.originLng,
+        destAddress: r.destAddress,
+        destLat: r.destLat,
+        destLng: r.destLng,
+        rideType: r.rideType,
+        price: r.price,
+        status: r.status,
+        distance: r.distance,
+        duration: r.duration,
+        waitTimeFee: r.waitTimeFee,
+        promoCode: r.promoCode,
+        promoDiscount: r.promoDiscount,
+        createdAt: r.createdAt,
+        completedAt: r.completedAt,
+        driver: r.driverName ? {
+          name: r.driverName,
+          rating: r.driverRating,
+          vehicleModel: r.vehicleModel,
+          vehiclePlate: r.vehiclePlate,
+          vehicleColor: r.vehicleColor ?? null,
+        } : null,
+      })),
+      nextCursor,
+      hasMore,
+    });
   } catch (err) { req.log.error(err); res.status(500).json({ message: "Erro interno" }); }
 });
 
 router.get("/rides/driver/history", authenticate, async (req: AuthRequest, res) => {
   try {
+    const limit = Math.min(Number(req.query.limit) || 20, 100);
+    const cursor = req.query.cursor as string | undefined;
+
+    const conditions = [eq(ridesTable.driverId, req.user!.userId)];
+    if (cursor) {
+      conditions.push(lt(ridesTable.createdAt, new Date(cursor)));
+    }
+
     const rides = await db.select({
       id: ridesTable.id,
       originAddress: ridesTable.originAddress,
@@ -83,20 +108,30 @@ router.get("/rides/driver/history", authenticate, async (req: AuthRequest, res) 
         ratingsTable,
         sql`${ratingsTable.rideId} = ${ridesTable.id} AND ${ratingsTable.ratedId} = ${ridesTable.driverId} AND ${ratingsTable.role} = 'passenger'`
       )
-      .where(eq(ridesTable.driverId, req.user!.userId))
-      .orderBy(desc(ridesTable.createdAt)).limit(50);
-    res.json(rides.map(r => ({
-      id: r.id,
-      originAddress: r.originAddress,
-      destAddress: r.destAddress,
-      rideType: r.rideType,
-      price: r.price,
-      status: r.status,
-      distance: r.distance,
-      duration: r.duration,
-      driverRating: r.passengerStars ?? null,
-      createdAt: r.createdAt,
-    })));
+      .where(and(...conditions))
+      .orderBy(desc(ridesTable.createdAt))
+      .limit(limit + 1);
+
+    const hasMore = rides.length > limit;
+    const items = hasMore ? rides.slice(0, limit) : rides;
+    const nextCursor = hasMore ? items[items.length - 1].createdAt?.toISOString() : null;
+
+    res.json({
+      items: items.map(r => ({
+        id: r.id,
+        originAddress: r.originAddress,
+        destAddress: r.destAddress,
+        rideType: r.rideType,
+        price: r.price,
+        status: r.status,
+        distance: r.distance,
+        duration: r.duration,
+        driverRating: r.passengerStars ?? null,
+        createdAt: r.createdAt,
+      })),
+      nextCursor,
+      hasMore,
+    });
   } catch (err) { req.log.error(err); res.status(500).json({ message: "Erro interno" }); }
 });
 

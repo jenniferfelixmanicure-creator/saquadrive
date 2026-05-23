@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext, useContext, useEffect, useRef, useState,
 } from "react";
@@ -41,6 +40,10 @@ type RideContextType = {
   currentRide: Ride | null;
   rideStatus: RideStatus;
   history: Ride[];
+  historyLoading: boolean;
+  historyNextCursor: string | null;
+  loadMoreHistory: () => Promise<void>;
+  refreshHistory: () => Promise<void>;
   requestRide: (
     origin: Location2, destination: Location2, rideType: RideType,
     distanceKm: number, passengerId: string, passengerName: string
@@ -61,7 +64,6 @@ type RideContextType = {
 };
 
 const RideContext = createContext<RideContextType>({} as RideContextType);
-const HISTORY_KEY = "zerorisco_history";
 
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const { socket, connected } = useSocket();
@@ -69,6 +71,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [rideStatus, setRideStatus] = useState<RideStatus>("idle");
   const [history, setHistory] = useState<Ride[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null);
   const [userLocation, setUserLocation] = useState<Location2 | null>(null);
   const [driverRealtimeLocation, setDriverRealtimeLocation] = useState<{
     latitude: number; longitude: number;
@@ -79,13 +83,44 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
 
   useEffect(() => {
-    loadHistory();
+    loadHistoryFromAPI();
     initLocation();
     return () => {
       timersRef.current.forEach(clearTimeout);
       locationSubRef.current?.remove();
     };
   }, []);
+
+  async function loadHistoryFromAPI(cursor?: string) {
+    if (historyLoading) return;
+    setHistoryLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (cursor) params.set("cursor", cursor);
+      const res = await apiFetch(`/api/rides/history?${params}`);
+      if (!res.ok) return;
+      const data = await res.json() as { items: Ride[]; nextCursor: string | null; hasMore: boolean };
+      if (cursor) {
+        setHistory((prev) => [...prev, ...data.items]);
+      } else {
+        setHistory(data.items);
+      }
+      setHistoryNextCursor(data.nextCursor);
+    } catch {
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  async function loadMoreHistory() {
+    if (!historyNextCursor) return;
+    await loadHistoryFromAPI(historyNextCursor);
+  }
+
+  async function refreshHistory() {
+    setHistoryNextCursor(null);
+    await loadHistoryFromAPI();
+  }
 
   async function initLocation() {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -245,19 +280,6 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     };
   }, [socket]);
 
-  async function loadHistory() {
-    try {
-      const stored = await AsyncStorage.getItem(HISTORY_KEY);
-      if (stored) setHistory(JSON.parse(stored));
-    } catch {}
-  }
-
-  async function saveHistory(rides: Ride[]) {
-    try {
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(rides));
-    } catch {}
-  }
-
   function getSurgeMultiplier(): { multiplier: number; isPeakHour: boolean } {
     const hour = new Date().getHours();
     const isPeakHour = PEAK_HOURS.some((p) => hour >= p.start && hour <= p.end);
@@ -370,15 +392,12 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
         Alert.alert("Aviso", "Não foi possível enviar sua avaliação. Tente novamente mais tarde.");
       }
     }
-    const rated = { ...currentRide, rating: stars, status: "completed" as RideStatus };
-    const newHistory = [rated, ...history].slice(0, 50);
-    setHistory(newHistory);
-    await saveHistory(newHistory);
     setCurrentRide(null);
     currentRideRef.current = null;
     setRideStatus("idle");
     setRouteCoordinates([]);
     setDriverRealtimeLocation(null);
+    refreshHistory().catch(() => {});
   }
 
   function triggerSOS() {
@@ -405,7 +424,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <RideContext.Provider value={{
-      currentRide, rideStatus, history, requestRide, cancelRide,
+      currentRide, rideStatus, history, historyLoading, historyNextCursor,
+      loadMoreHistory, refreshHistory, requestRide, cancelRide,
       rateDriver, resetRide, calculatePrice, calculateDuration,
       calculateDistance, triggerSOS, verifyPIN, userLocation,
       routeCoordinates, driverRealtimeLocation,

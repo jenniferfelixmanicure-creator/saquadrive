@@ -1,4 +1,7 @@
-import { pgTable, text, serial, integer, real, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import {
+  pgTable, text, serial, integer, real, boolean,
+  timestamp, varchar, index, uniqueIndex,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -31,7 +34,11 @@ export const usersTable = pgTable("users", {
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
   expoPushToken: text("expo_push_token"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("users_role_idx").on(t.role),
+  index("users_is_approved_idx").on(t.isApproved),
+  index("users_suspended_idx").on(t.suspended),
+]);
 
 export const ridesTable = pgTable("rides", {
   id: text("id").primaryKey(),
@@ -57,7 +64,13 @@ export const ridesTable = pgTable("rides", {
   promoDiscount: real("promo_discount").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   completedAt: timestamp("completed_at"),
-});
+}, (t) => [
+  index("rides_passenger_id_idx").on(t.passengerId),
+  index("rides_driver_id_idx").on(t.driverId),
+  index("rides_status_idx").on(t.status),
+  index("rides_passenger_created_idx").on(t.passengerId, t.createdAt),
+  index("rides_driver_created_idx").on(t.driverId, t.createdAt),
+]);
 
 export const ratingsTable = pgTable("ratings", {
   id: serial("id").primaryKey(),
@@ -68,7 +81,10 @@ export const ratingsTable = pgTable("ratings", {
   comment: text("comment"),
   role: text("role").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("ratings_rated_id_idx").on(t.ratedId),
+  uniqueIndex("ratings_ride_rater_unique_idx").on(t.rideId, t.raterId),
+]);
 
 export const chatMessagesTable = pgTable("chat_messages", {
   id: serial("id").primaryKey(),
@@ -78,7 +94,9 @@ export const chatMessagesTable = pgTable("chat_messages", {
   message: text("message").notNull(),
   timestamp: timestamp("timestamp").defaultNow(),
   rideId: text("ride_id"),
-});
+}, (t) => [
+  index("chat_messages_ride_id_idx").on(t.rideId),
+]);
 
 export const refreshTokensTable = pgTable("refresh_tokens", {
   id: serial("id").primaryKey(),
@@ -86,7 +104,9 @@ export const refreshTokensTable = pgTable("refresh_tokens", {
   token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("refresh_tokens_user_id_idx").on(t.userId),
+]);
 
 export const promoCodesTable = pgTable("promo_codes", {
   id: serial("id").primaryKey(),

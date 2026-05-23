@@ -1,75 +1,97 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-  import { API_URL, SOCKET_PATH } from "@/constants/api";
-  import { useAuth } from "./AuthContext";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { API_URL, SOCKET_PATH } from "@/constants/api";
+import { useAuth } from "./AuthContext";
 
-  type SocketContextType = {
-    socket: unknown | null;
-    connected: boolean;
-  };
+type ReconnectCallback = () => void;
 
-  const SocketContext = createContext<SocketContextType>({ socket: null, connected: false });
+type SocketContextType = {
+  socket: unknown | null;
+  connected: boolean;
+  onReconnect: (cb: ReconnectCallback) => () => void;
+};
 
-  export function SocketProvider({ children }: { children: React.ReactNode }) {
-    const { token } = useAuth();
-    const tokenRef = useRef<string | null>(token);
-    const [socket, setSocket] = useState<unknown | null>(null);
-    const [connected, setConnected] = useState(false);
+const SocketContext = createContext<SocketContextType>({
+  socket: null,
+  connected: false,
+  onReconnect: () => () => {},
+});
 
-    tokenRef.current = token;
+export function SocketProvider({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
+  const tokenRef = useRef<string | null>(token);
+  const [socket, setSocket] = useState<unknown | null>(null);
+  const [connected, setConnected] = useState(false);
+  const reconnectListeners = useRef<Set<ReconnectCallback>>(new Set());
 
-    const isLoggedIn = !!token;
+  tokenRef.current = token;
 
-    useEffect(() => {
-      let s: { disconnect?: () => void; on?: (e: string, cb: (...a: unknown[]) => void) => void; auth?: Record<string, string> } | null = null;
+  const isLoggedIn = !!token;
 
-      if (!isLoggedIn) {
-        setSocket(null);
-        setConnected(false);
-        return;
-      }
+  const onReconnect = useCallback((cb: ReconnectCallback) => {
+    reconnectListeners.current.add(cb);
+    return () => { reconnectListeners.current.delete(cb); };
+  }, []);
 
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { io } = require("socket.io-client") as { io: (url: string, opts: Record<string, unknown>) => typeof s };
-        s = io(API_URL, {
-          path: SOCKET_PATH,
-          transports: ["websocket", "polling"],
-          reconnectionAttempts: 10,
-          reconnectionDelay: 3000,
-          auth: { token: tokenRef.current ?? "" },
-          timeout: 10000,
+  useEffect(() => {
+    let s: { disconnect?: () => void; on?: (e: string, cb: (...a: unknown[]) => void) => void; auth?: Record<string, string> } | null = null;
+
+    if (!isLoggedIn) {
+      setSocket(null);
+      setConnected(false);
+      return;
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { io } = require("socket.io-client") as { io: (url: string, opts: Record<string, unknown>) => typeof s };
+      s = io(API_URL, {
+        path: SOCKET_PATH,
+        transports: ["websocket", "polling"],
+        reconnectionAttempts: 15,
+        reconnectionDelay: 2000,
+        reconnectionDelayMax: 10000,
+        auth: { token: tokenRef.current ?? "" },
+        timeout: 10000,
+      });
+
+      s?.on?.("connect", () => setConnected(true));
+
+      s?.on?.("reconnect", () => {
+        setConnected(true);
+        reconnectListeners.current.forEach((cb) => {
+          try { cb(); } catch {}
         });
+      });
 
-        s?.on?.("connect", () => setConnected(true));
-        s?.on?.("disconnect", () => setConnected(false));
-        s?.on?.("connect_error", (err: unknown) => {
-          console.warn("[Socket] Erro de conexão:", (err as Error)?.message ?? err);
-        });
+      s?.on?.("disconnect", () => setConnected(false));
 
-        setSocket(s);
-      } catch (err) {
-        console.warn("[Socket] Falha ao inicializar socket.io:", (err as Error)?.message ?? err);
-      }
+      s?.on?.("connect_error", (err: unknown) => {
+        console.warn("[Socket] Erro de conexão:", (err as Error)?.message ?? err);
+      });
 
-      return () => {
-        try { s?.disconnect?.(); } catch {}
-        setSocket(null);
-        setConnected(false);
-      };
-    }, [isLoggedIn]);
+      setSocket(s);
+    } catch (err) {
+      console.warn("[Socket] Falha ao inicializar socket.io:", (err as Error)?.message ?? err);
+    }
 
-    useEffect(() => {
-      if (socket && token) {
-        (socket as { auth: Record<string, string> }).auth = { token };
-      }
-    }, [socket, token]);
+    return () => {
+      try { s?.disconnect?.(); } catch {}
+      setSocket(null);
+      setConnected(false);
+    };
+  }, [isLoggedIn]);
 
-    return (
-      <SocketContext.Provider value={{ socket, connected }}>
-        {children}
-      </SocketContext.Provider>
-    );
-  }
+  useEffect(() => {
+    if (socket && token) {
+      (socket as { auth: Record<string, string> }).auth = { token };
+    }
+  }, [socket, token]);
 
-  export const useSocket = () => useContext(SocketContext);
-  
+  return (
+    <SocketContext.Provider value={{ socket, connected, onReconnect }}>
+      {children}
+    </SocketContext.Provider>
+  );
+}
+
+export const useSocket = () => useContext(SocketContext);

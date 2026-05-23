@@ -31,11 +31,25 @@ export function requireRole(...roles: string[]) {
 }
 
 export function authenticateAdmin(req: AuthRequest, res: Response, next: NextFunction): void {
-  const secret = req.headers["x-admin-secret"];
   const adminSecret = process.env.ADMIN_SECRET;
-  if (!adminSecret || secret !== adminSecret) {
-    res.status(401).json({ message: "Acesso não autorizado" });
+
+  const headerSecret = req.headers["x-admin-secret"] as string | undefined;
+  if (adminSecret && headerSecret === adminSecret) {
+    next();
     return;
   }
-  next();
+
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    try {
+      const payload = verifyAccessToken(authHeader.slice(7));
+      if (payload.role === "admin") {
+        req.user = payload;
+        next();
+        return;
+      }
+    } catch {}
+  }
+
+  res.status(401).json({ message: "Acesso não autorizado" });
 }

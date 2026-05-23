@@ -1,7 +1,7 @@
 import { Server, Socket } from "socket.io";
 import { db } from "@workspace/db";
 import { ridesTable, usersTable, promoCodesTable } from "@workspace/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, isNotNull } from "drizzle-orm";
 import { logger } from "../lib/logger.js";
 import {
   askZeroRiscoIA,
@@ -11,25 +11,19 @@ import {
   detectRouteDeviation,
   assessRideRisk,
 } from "../lib/ai.js";
+import { sendPushNotification } from "../lib/expoPush.js";
 import jwt from "jsonwebtoken";
+import {
+  LATE_CANCEL_FEE,
+  WAIT_FREE_MINUTES,
+  WAIT_FEE_PER_MIN,
+  calculateFare,
+  getSurgeMultiplier,
+  canDriverHandleRide,
+  getDriverCategory,
+} from "@workspace/pricing";
 
-const JWT_SECRET = process.env["JWT_SECRET"] ?? "zerorisco_jwt_secret_dev";
-
-const RIDE_PRICES: Record<string, number> = { moto: 1.20, basico: 1.70, intermediario: 2.20, vip: 3.90 };
-const BASE_FEE = 5.5;
-const PEAK_HOURS = [{ start: 7, end: 9 }, { start: 17, end: 19 }];
-const LATE_CANCEL_FEE = 7.50;
-const WAIT_FREE_MINUTES = 2;
-const WAIT_FEE_PER_MIN = 0.30;
-
-function calculatePrice(distanceKm: number, rideType: string): { total: number; surgeMultiplier: number } {
-  const perKm = RIDE_PRICES[rideType] ?? 1.70;
-  const hour = new Date().getHours();
-  const isPeak = PEAK_HOURS.some((p) => hour >= p.start && hour <= p.end);
-  const surge = isPeak ? 1.5 : 1.0;
-  const raw = Math.round((BASE_FEE + distanceKm * perKm) * surge * 100) / 100;
-  return { total: Math.max(raw, 10), surgeMultiplier: surge };
-}
+const JWT_SECRET = process.env["JWT_SECRET"]!;
 
 type DriverInfo = {
   socketId: string; driverId: string; name: string; car: string;
@@ -72,6 +66,9 @@ const activeRides = new Map<string, ActiveRide>();
 const rideArrivedAt = new Map<string, Date>();
 const waitTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+const deviationThrottle = new Map<string, number>();
+const DEVIATION_THROTTLE_MS = 30_000;
+
 function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -80,32 +77,59 @@ function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function getDriverCategory(vehicleYear: number): "basico" | "intermediario" | "vip" {
-  if (vehicleYear >= 2020) return "vip";
-  if (vehicleYear >= 2011) return "intermediario";
-  return "basico";
-}
-
-function canDriverHandleRide(driver: DriverInfo, rideType: string): boolean {
-  if (rideType === "moto") return driver.vehicleType === "moto";
-  if (driver.vehicleType !== "car") return false;
-  const y = driver.vehicleYear;
-  if (!y) return false;
-  const category = getDriverCategory(y);
-  if (category === "vip") return true;
-  if (category === "intermediario") return rideType !== "vip";
-  return rideType === "basico";
-}
-
 function getNearbyDrivers(lat: number, lng: number, rideType: string, radius = 10) {
   const available: (DriverInfo & { distanceToPassenger: number })[] = [];
   for (const driver of onlineDrivers.values()) {
     if (Array.from(activeRides.values()).some((r) => r.driverId === driver.driverId)) continue;
-    if (!canDriverHandleRide(driver, rideType)) continue;
+    if (!canDriverHandleRide(driver.vehicleType, driver.vehicleYear, rideType)) continue;
     const dist = getDistanceKm(lat, lng, driver.latitude, driver.longitude);
     if (dist <= radius) available.push({ ...driver, distanceToPassenger: dist });
   }
   return available.sort((a, b) => a.distanceToPassenger - b.distanceToPassenger);
+}
+
+async function notifyOfflineDrivers(
+  lat: number, lng: number, rideType: string, rideId: string, price: number
+): Promise<void> {
+  try {
+    const onlineIds = Array.from(onlineDrivers.keys()).map(Number).filter(Boolean);
+    const drivers = await db.select({
+      id: usersTable.id,
+      expoPushToken: usersTable.expoPushToken,
+      vehicleType: usersTable.vehicleType,
+      vehicleYear: usersTable.vehicleYear,
+    }).from(usersTable)
+      .where(
+        and(
+          eq(usersTable.role, "driver"),
+          eq(usersTable.isApproved, true),
+          isNotNull(usersTable.expoPushToken)
+        )
+      );
+
+    const eligible = drivers.filter((d) => {
+      if (onlineIds.includes(d.id)) return false;
+      if (!d.vehicleType || !d.vehicleYear) return false;
+      return canDriverHandleRide(d.vehicleType as "car" | "moto", d.vehicleYear, rideType);
+    });
+
+    const typeLabel: Record<string, string> = {
+      moto: "Moto", basico: "Básico", intermediario: "Intermediário", vip: "VIP",
+    };
+
+    await Promise.all(
+      eligible.slice(0, 30).map((d) =>
+        sendPushNotification(
+          d.expoPushToken,
+          "Nova corrida disponível!",
+          `Categoria ${typeLabel[rideType] ?? rideType} — R$ ${price.toFixed(2)}. Abra o app para aceitar.`,
+          { type: "new_ride", rideId, rideType, price }
+        ).catch(() => {})
+      )
+    );
+  } catch (err) {
+    logger.error({ err }, "Erro ao notificar motoristas offline");
+  }
 }
 
 async function loadActiveRides() {
@@ -235,8 +259,9 @@ export function registerRideSocket(io: Server) {
       const origin = data.origin as RideOriginDest;
       const destination = data.destination as RideOriginDest;
       const distanceKm = data.distanceKm ?? getDistanceKm(origin.lat, origin.lng, destination.lat, destination.lng);
-      const { total: basePrice, surgeMultiplier } = calculatePrice(distanceKm, data.rideType);
       const hour = new Date().getHours();
+      const surgeMultiplier = getSurgeMultiplier(hour);
+      const basePrice = calculateFare(distanceKm, data.rideType, surgeMultiplier);
 
       const aiResult = await calculateSmartPrice({ distanceKm, rideType: data.rideType, hour, surgeMultiplier }).catch(() => null);
       const serverPrice = aiResult?.suggestedFare ?? basePrice;
@@ -285,6 +310,7 @@ export function registerRideSocket(io: Server) {
       const nearbyDrivers = getNearbyDrivers(origin.lat, origin.lng, data.rideType);
       if (nearbyDrivers.length === 0) {
         socket.emit("passenger:waiting_for_driver", { rideId: data.rideId, waitSeconds: 60 });
+        notifyOfflineDrivers(origin.lat, origin.lng, data.rideType, data.rideId, serverPrice).catch(() => {});
         const waitTimeoutId = setTimeout(async () => {
           if (waitingRides.has(data.rideId)) {
             waitingRides.delete(data.rideId);
@@ -417,6 +443,7 @@ export function registerRideSocket(io: Server) {
       if (!active) return;
       if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
       rideArrivedAt.delete(rideId);
+      deviationThrottle.delete(rideId);
       logger.info({ rideId }, "Viagem concluída");
       io.to(active.passengerSocketId).emit("passenger:trip_completed", { rideId });
       activeRides.delete(rideId);
@@ -434,6 +461,7 @@ export function registerRideSocket(io: Server) {
       if (!active) return;
       if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
       rideArrivedAt.delete(rideId);
+      deviationThrottle.delete(rideId);
       io.to(active.passengerSocketId).emit("passenger:ride_cancelled_by_driver", { rideId });
       activeRides.delete(rideId);
       await db.update(ridesTable).set({ status: "cancelled", driverId: null }).where(eq(ridesTable.id, rideId)).catch(() => {});
@@ -446,6 +474,7 @@ export function registerRideSocket(io: Server) {
       const isLate = active && rideArrivedAt.has(rideId);
       if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
       rideArrivedAt.delete(rideId);
+      deviationThrottle.delete(rideId);
       if (active) {
         io.to(active.driverSocketId).emit("driver:ride_cancelled", { rideId });
         activeRides.delete(rideId);
@@ -481,7 +510,12 @@ export function registerRideSocket(io: Server) {
             io.to(activeRide.passengerSocketId).emit("driver:location_update", { rideId, latitude, longitude });
 
             if (activeRide.destLat && activeRide.destLng && activeRide.originLat && activeRide.originLng) {
-              const elapsedMin = activeRide.startedAt ? (Date.now() - activeRide.startedAt) / 60000 : 0;
+              const now = Date.now();
+              const lastCheck = deviationThrottle.get(rideId) ?? 0;
+              if (now - lastCheck < DEVIATION_THROTTLE_MS) continue;
+              deviationThrottle.set(rideId, now);
+
+              const elapsedMin = activeRide.startedAt ? (now - activeRide.startedAt) / 60000 : 0;
               const deviation = await detectRouteDeviation({
                 rideId,
                 currentLat: latitude,

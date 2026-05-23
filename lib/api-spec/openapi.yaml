@@ -3,34 +3,1094 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ZeroRisco API — transporte seguro em Saquarema, RJ
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+    description: Health check
+  - name: auth
+    description: Autenticação e tokens
+  - name: users
+    description: Perfil do usuário
+  - name: rides
+    description: Corridas e histórico
+  - name: ratings
+    description: Avaliações
+  - name: documents
+    description: Upload de documentos
+  - name: admin
+    description: Painel administrativo
+  - name: ai
+    description: Integração com ZeroRisco IA
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
-          description: Healthy
+          description: Servidor saudável
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: object
+                properties:
+                  status:
+                    type: string
+                required: [status]
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Cadastrar novo usuário
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                password:
+                  type: string
+                  minLength: 6
+                role:
+                  type: string
+                  enum: [passenger, driver]
+              required: [name, email, phone, password]
+      responses:
+        "201":
+          description: Usuário criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+              required: [email, password]
+      responses:
+        "200":
+          description: Login com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Renovar access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+              required: [refreshToken]
+      responses:
+        "200":
+          description: Tokens renovados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  refreshToken:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Alterar senha
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+                  minLength: 6
+              required: [currentPassword, newPassword]
+      responses:
+        "200":
+          description: Senha alterada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Obter perfil do usuário autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil do usuário
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      operationId: updateMe
+      tags: [users]
+      summary: Atualizar perfil
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                vehiclePlate:
+                  type: string
+                vehicleModel:
+                  type: string
+                vehicleYear:
+                  type: integer
+                vehicleType:
+                  type: string
+                vehicleColor:
+                  type: string
+      responses:
+        "200":
+          description: Perfil atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /users/me/expo-token:
+    post:
+      operationId: registerExpoToken
+      tags: [users]
+      summary: Registrar token Expo Push para notificações
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expoPushToken:
+                  type: string
+              required: [expoPushToken]
+      responses:
+        "200":
+          description: Token registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /rides/history:
+    get:
+      operationId: getRidesHistory
+      tags: [rides]
+      summary: Histórico de corridas do passageiro (paginação por cursor)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: cursor
+          in: query
+          description: Cursor ISO-8601 da última corrida retornada (campo createdAt)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Lista paginada de corridas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedRides"
+
+  /rides/driver/history:
+    get:
+      operationId: getDriverRidesHistory
+      tags: [rides]
+      summary: Histórico de corridas do motorista (paginação por cursor)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: cursor
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Lista paginada de corridas
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedDriverRides"
+
+  /rides/driver/stats:
+    get:
+      operationId: getDriverStats
+      tags: [rides]
+      summary: Estatísticas de ganhos e corridas do motorista
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Estatísticas do motorista
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DriverStats"
+
+  /rides/promo/validate:
+    post:
+      operationId: validatePromoCode
+      tags: [rides]
+      summary: Validar código promocional
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+              required: [code]
+      responses:
+        "200":
+          description: Código válido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoValidation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /rides/promo/active:
+    get:
+      operationId: getActivePromoCodes
+      tags: [rides]
+      summary: Listar cupons ativos (visíveis ao passageiro)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Lista de cupons ativos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromoCodePublic"
+
+  /ratings:
+    post:
+      operationId: createRating
+      tags: [ratings]
+      summary: Avaliar motorista ou passageiro após corrida
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rideId:
+                  type: string
+                ratedId:
+                  type: integer
+                stars:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                role:
+                  type: string
+                  enum: [passenger, driver]
+              required: [rideId, ratedId, stars, role]
+      responses:
+        "201":
+          description: Avaliação registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  rating:
+                    type: number
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /documents/upload:
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload de documento (RG, CNH, CRLV, foto de perfil)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                type:
+                  type: string
+                  enum: [rg, cnh, crlv, profile]
+              required: [file, type]
+      responses:
+        "200":
+          description: Documento enviado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Estatísticas gerais do sistema
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Estatísticas do painel admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/drivers/pending:
+    get:
+      operationId: getPendingDrivers
+      tags: [admin]
+      summary: Motoristas aguardando aprovação de documentos
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Lista de motoristas pendentes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriverAdminView"
+
+  /admin/drivers/all:
+    get:
+      operationId: getAllDrivers
+      tags: [admin]
+      summary: Todos os motoristas cadastrados
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Lista de motoristas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriverAdminView"
+
+  /admin/drivers/{id}/approve:
+    post:
+      operationId: approveDriver
+      tags: [admin]
+      summary: Aprovar motorista e liberar acesso à plataforma
+      security:
+        - adminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Motorista aprovado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/drivers/{id}/reject:
+    post:
+      operationId: rejectDriver
+      tags: [admin]
+      summary: Rejeitar documentos do motorista
+      security:
+        - adminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Motorista rejeitado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/users:
+    get:
+      operationId: getAllUsers
+      tags: [admin]
+      summary: Todos os usuários da plataforma
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Lista de usuários
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserAdminView"
+
+  /admin/users/{id}/suspend:
+    post:
+      operationId: suspendUser
+      tags: [admin]
+      summary: Suspender conta de usuário
+      security:
+        - adminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Usuário suspenso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/users/{id}/release-suspension:
+    post:
+      operationId: releaseSuspension
+      tags: [admin]
+      summary: Liberar suspensão de usuário e zerar taxa de cancelamento
+      security:
+        - adminAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Suspensão liberada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /admin/promo-codes:
+    get:
+      operationId: getAdminPromoCodes
+      tags: [admin]
+      summary: Listar todos os cupons promocionais
+      security:
+        - adminAuth: []
+      responses:
+        "200":
+          description: Lista de cupons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromoCode"
+    post:
+      operationId: createPromoCode
+      tags: [admin]
+      summary: Criar cupom promocional
+      security:
+        - adminAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                description:
+                  type: string
+                discountType:
+                  type: string
+                  enum: [fixed, percentage]
+                discountValue:
+                  type: number
+                maxUses:
+                  type: integer
+                expiresAt:
+                  type: string
+                  format: date-time
+              required: [code, discountValue]
+      responses:
+        "201":
+          description: Cupom criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoCode"
+
+  /ai/support:
+    post:
+      operationId: aiSupport
+      tags: [ai]
+      summary: Chat com ZeroRisco IA — central de suporte inteligente
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question:
+                  type: string
+                context:
+                  type: string
+              required: [question]
+      responses:
+        "200":
+          description: Resposta da ZeroRisco IA
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  answer:
+                    type: string
+                  category:
+                    type: string
+                    enum: [ride, payment, safety, account, driver, other]
+                  requiresHuman:
+                    type: boolean
+                  suggestedActions:
+                    type: array
+                    items:
+                      type: string
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    adminAuth:
+      type: apiKey
+      in: header
+      name: x-admin-secret
+
+  responses:
+    BadRequest:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Não autorizado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: Conflito — recurso já existe
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: Rate limit atingido
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
   schemas:
-    HealthStatus:
+    ErrorResponse:
       type: object
       properties:
+        message:
+          type: string
+      required: [message]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+            phone:
+              type: string
+            isApproved:
+              type: boolean
+            rgStatus:
+              type: string
+            profilePhotoUrl:
+              type: string
+              nullable: true
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        isApproved:
+          type: boolean
+        suspended:
+          type: boolean
+        driverRating:
+          type: number
+        passengerRating:
+          type: number
+        totalRides:
+          type: integer
+        profilePhotoUrl:
+          type: string
+          nullable: true
+        vehiclePlate:
+          type: string
+          nullable: true
+        vehicleModel:
+          type: string
+          nullable: true
+        vehicleYear:
+          type: integer
+          nullable: true
+        vehicleType:
+          type: string
+          nullable: true
+        vehicleColor:
+          type: string
+          nullable: true
+        subscriptionActive:
+          type: boolean
+        subscriptionExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    PaginatedRides:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RideHistoryItem"
+        nextCursor:
+          type: string
+          nullable: true
+          description: Passe como ?cursor= na próxima requisição para buscar mais
+        hasMore:
+          type: boolean
+      required: [items, hasMore]
+
+    PaginatedDriverRides:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DriverRideHistoryItem"
+        nextCursor:
+          type: string
+          nullable: true
+        hasMore:
+          type: boolean
+      required: [items, hasMore]
+
+    RideHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        originAddress:
+          type: string
+        destAddress:
+          type: string
+        rideType:
+          type: string
+        price:
+          type: number
         status:
           type: string
-      required:
-        - status
+        distance:
+          type: string
+          nullable: true
+        duration:
+          type: string
+          nullable: true
+        waitTimeFee:
+          type: number
+        promoCode:
+          type: string
+          nullable: true
+        promoDiscount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        driver:
+          nullable: true
+          type: object
+          properties:
+            name:
+              type: string
+            rating:
+              type: number
+            vehicleModel:
+              type: string
+              nullable: true
+            vehiclePlate:
+              type: string
+              nullable: true
+            vehicleColor:
+              type: string
+              nullable: true
 
+    DriverRideHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        originAddress:
+          type: string
+        destAddress:
+          type: string
+        rideType:
+          type: string
+        price:
+          type: number
+        status:
+          type: string
+        distance:
+          type: string
+          nullable: true
+        duration:
+          type: string
+          nullable: true
+        driverRating:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    DriverStats:
+      type: object
+      properties:
+        totalRides:
+          type: integer
+        totalEarnings:
+          type: number
+        weekRides:
+          type: integer
+        weekEarnings:
+          type: number
+        monthRides:
+          type: integer
+        monthEarnings:
+          type: number
+        todayRides:
+          type: integer
+        rating:
+          type: number
+
+    PromoValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        code:
+          type: string
+        description:
+          type: string
+          nullable: true
+        discountType:
+          type: string
+        discountValue:
+          type: number
+
+    PromoCodePublic:
+      type: object
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+          nullable: true
+        discountType:
+          type: string
+        discountValue:
+          type: number
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    PromoCode:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        description:
+          type: string
+          nullable: true
+        discountType:
+          type: string
+        discountValue:
+          type: number
+        isActive:
+          type: boolean
+        maxUses:
+          type: integer
+          nullable: true
+        usedCount:
+          type: integer
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminStats:
+      type: object
+      properties:
+        totalUsers:
+          type: integer
+        totalRides:
+          type: integer
+        pendingDrivers:
+          type: integer
+        totalRevenue:
+          type: number
+        suspendedUsers:
+          type: integer
+
+    DriverAdminView:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        isApproved:
+          type: boolean
+        rgStatus:
+          type: string
+        cnhStatus:
+          type: string
+        crlvStatus:
+          type: string
+        vehiclePlate:
+          type: string
+          nullable: true
+        vehicleModel:
+          type: string
+          nullable: true
+        vehicleYear:
+          type: integer
+          nullable: true
+        vehicleColor:
+          type: string
+          nullable: true
+        driverRating:
+          type: number
+        totalRides:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    UserAdminView:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        isApproved:
+          type: boolean
+        suspended:
+          type: boolean
+        cancellationFeeOwed:
+          type: number
+        totalRides:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
