@@ -15,6 +15,7 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useColors } from "@/hooks/useColors";
 import RideChat, { ChatMessage } from "@/components/RideChat";
 import AIMonitoringPopup from "@/components/AIMonitoringPopup";
+import MonitoringBanner from "@/components/MonitoringBanner";
 import { searchPlaces, getPlaceDetails, getRoute } from "@/lib/google-maps";
 import { API_URL } from "@/constants/api";
 
@@ -389,68 +390,9 @@ export default function PassengerHomeScreen() {
           </View>
         )}
 
-        {phase === "idle" && user?.isApproved && (() => {
-          const neonGlow = neonPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] });
-          const neonRingScale = neonPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
-          const neonRingOpacity = neonPulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.15, 0.45, 0.15] });
-          const scanTranslate = scanAnim.interpolate({ inputRange: [0, 1], outputRange: [-90, 90] });
-          return (
-            <View style={styles.neonBanner}>
-              {/* Logo */}
-              <Image
-                source={require("@/assets/images/zerorisco_logo_futuristic.png")}
-                style={styles.neonLogo}
-                resizeMode="contain"
-              />
-
-              {/* Shield core with neon ring */}
-              <View style={styles.neonShieldWrapper}>
-                <Animated.View style={[styles.neonRing, {
-                  opacity: neonRingOpacity,
-                  transform: [{ scale: neonRingScale }],
-                }]} />
-                <Animated.View style={[styles.neonShieldOuter, {
-                  transform: [{ scale: shieldScaleAnim }],
-                  shadowOpacity: neonGlow as unknown as number,
-                }]}>
-                  <View style={styles.neonShieldInner}>
-                    <Feather name="shield" size={28} color="#00FF88" />
-                  </View>
-                </Animated.View>
-
-                {/* Scan line */}
-                <View style={styles.neonScanClip} pointerEvents="none">
-                  <Animated.View style={[styles.neonScanLine, { transform: [{ translateY: scanTranslate }] }]} />
-                </View>
-              </View>
-
-              {/* Status text */}
-              <Animated.Text style={[styles.neonMonitoringText, { opacity: neonGlow as unknown as number }]}>
-                ● MONITORANDO
-              </Animated.Text>
-              <Text style={styles.neonSubText}>ZeroRisco IA ativa · Sistema operacional</Text>
-
-              {/* Status chips */}
-              <View style={styles.neonChipsRow}>
-                {[
-                  { icon: "cpu" as const, label: "IA Ativa" },
-                  { icon: "map-pin" as const, label: "GPS Seguro" },
-                  { icon: "lock" as const, label: "Criptografado" },
-                ].map((chip) => (
-                  <View key={chip.label} style={styles.neonChip}>
-                    <Feather name={chip.icon} size={11} color="#00FF88" />
-                    <Text style={styles.neonChipText}>{chip.label}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* CTA */}
-              <Text style={[styles.neonCtaText, { color: colors.mutedForeground }]}>
-                Busque seu destino acima para começar
-              </Text>
-            </View>
-          );
-        })()}
+        {phase === "idle" && user?.isApproved && (
+          <MonitoringBanner />
+        )}
 
         {phase === "confirming" && destination && (
           <ScrollView showsVerticalScrollIndicator={false}>
