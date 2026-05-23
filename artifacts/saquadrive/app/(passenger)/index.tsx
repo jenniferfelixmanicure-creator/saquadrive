@@ -479,13 +479,9 @@ export default function PassengerHomeScreen() {
                 <Feather name="headphones" size={11} color={colors.mutedForeground} />
                 <Text style={[styles.trustText, { color: colors.mutedForeground }]}>Suporte 24/7</Text>
               </View>
-              <View style={styles.trustItem}>
-                <Feather name="check-circle" size={11} color={colors.mutedForeground} />
-                <Text style={[styles.trustText, { color: colors.mutedForeground }]}>Seguro incluso</Text>
-              </View>
             </View>
 
-            <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.muted, marginTop: 8 }]} onPress={handleCancel} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.muted, marginTop: 8, marginBottom: botPad + 8 }]} onPress={handleCancel} activeOpacity={0.8}>
               <Text style={[styles.cancelBtnText, { color: colors.foreground }]}>Cancelar</Text>
             </TouchableOpacity>
           </ScrollView>
