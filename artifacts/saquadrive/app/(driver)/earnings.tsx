@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 type Period = "hoje" | "semana" | "mes";
@@ -92,7 +93,8 @@ export default function EarningsScreen() {
       const res = await apiFetch("/api/rides/driver/history", { signal: controller.signal });
       clearTimeout(timer);
       if (!res.ok) throw new Error(`Erro ${res.status}`);
-      const data = await res.json() as ApiRide[];
+      const raw = await res.json();
+      const data: ApiRide[] = Array.isArray(raw) ? raw : (raw.items ?? []);
       setAllRides(data);
     } catch (e: unknown) {
       clearTimeout(timer);

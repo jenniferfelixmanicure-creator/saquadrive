@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ZeroRisco",
-    "slug": "zerorisco-saquarema",
+    "slug": "zerorisco",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -93,7 +93,7 @@
         }
       ]
     ],
-    "owner": "zeroriscov3",
+    "owner": "zeroriscov4",
     "extra": {
       "router": {},
       "expo-navigation-bar": {
@@ -102,7 +102,7 @@
         "legacyVisible": "immersive"
       },
       "eas": {
-        "projectId": "ed480225-d91f-4606-9a12-93d02dc59b67"
+        "projectId": "ae099349-2e25-4198-8cd6-33e0d33b208f"
       }
     },
     "updates": {}

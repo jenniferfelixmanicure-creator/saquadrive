@@ -11,6 +11,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { router } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -83,6 +84,15 @@ function StatsCard({ stats, colors }: { stats: Stats; colors: ReturnType<typeof 
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Este mês</Text>
         </View>
       </View>
+      <TouchableOpacity
+        style={[styles.earningsBtn, { borderColor: colors.border }]}
+        onPress={() => router.push("/(driver)/earnings")}
+        activeOpacity={0.85}
+      >
+        <Feather name="dollar-sign" size={14} color={colors.success} />
+        <Text style={[styles.earningsBtnText, { color: colors.success }]}>Ver ganhos detalhados</Text>
+        <Feather name="chevron-right" size={14} color={colors.success} />
+      </TouchableOpacity>
       <View style={[styles.statsFooter, { borderTopColor: colors.border }]}>
         <View style={styles.chip}>
           <Feather name="star" size={13} color="#FFD60A" />
@@ -319,6 +329,8 @@ const styles = StyleSheet.create({
   emptyIcon: { width: 72, height: 72, borderRadius: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   emptyTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   emptyDesc: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  earningsBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderTopWidth: 1, paddingVertical: 12 },
+  earningsBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold", flex: 1, textAlign: "center" },
   loadMore: { margin: 16, borderWidth: 1, borderRadius: 12, paddingVertical: 14, alignItems: "center" },
   loadMoreText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 });

@@ -37,8 +37,113 @@ function AnimatedDots({ anim, color }: { anim: Animated.Value; color: string }) 
         return <Animated.Text key={i} style={{ fontSize: 20, fontFamily: "Inter_700Bold", color, opacity }}>•</Animated.Text>;
       })}
     </View>
+
+      {/* ── CANCEL REASON MODAL ─────────────────────────────────────── */}
+      <Modal visible={showCancelModal} transparent animationType="slide" onRequestClose={() => setShowCancelModal(false)}>
+        <View style={modalStyles.overlay}>
+          <View style={[modalStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[modalStyles.title, { color: colors.foreground }]}>Cancelar corrida</Text>
+            <Text style={[modalStyles.subtitle, { color: colors.mutedForeground }]}>Selecione um motivo (opcional)</Text>
+            <View style={modalStyles.reasons}>
+              {["Demorou muito para aceitar","Motorista está longe demais","Mudei de planos","Endereço incorreto","Prefiro tentar depois"].map((r) => (
+                <TouchableOpacity
+                  key={r}
+                  style={[modalStyles.reasonBtn, { borderColor: cancelReason === r ? colors.primary : colors.border, backgroundColor: cancelReason === r ? colors.primary + "18" : "transparent" }]}
+                  onPress={() => setCancelReason(r === cancelReason ? "" : r)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[modalStyles.reasonText, { color: cancelReason === r ? colors.primary : colors.foreground }]}>{r}</Text>
+                  {cancelReason === r && <Feather name="check" size={14} color={colors.primary} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={modalStyles.btnRow}>
+              <TouchableOpacity style={[modalStyles.btn, { borderWidth: 1, borderColor: colors.border }]} onPress={() => setShowCancelModal(false)}>
+                <Text style={[modalStyles.btnText, { color: colors.foreground }]}>Voltar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[modalStyles.btn, { backgroundColor: "#FF453A" }]} onPress={handleCancel}>
+                <Text style={[modalStyles.btnText, { color: "#fff" }]}>Cancelar corrida</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── DRIVER PROFILE MODAL ────────────────────────────────────── */}
+      {currentRide?.driver && (
+        <Modal visible={showDriverProfile} transparent animationType="slide" onRequestClose={() => setShowDriverProfile(false)}>
+          <View style={modalStyles.overlay}>
+            <View style={[modalStyles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={modalStyles.profileHeader}>
+                {currentRide.driver.photo?.startsWith("http") ? (
+                  <Image source={{ uri: currentRide.driver.photo }} style={modalStyles.profileAvatar} />
+                ) : (
+                  <View style={[modalStyles.profileAvatar, { backgroundColor: colors.secondary, alignItems: "center", justifyContent: "center" }]}>
+                    <Text style={{ fontSize: 36 }}>{currentRide.driver.photo ?? currentRide.driver.name[0]}</Text>
+                  </View>
+                )}
+                <Text style={[modalStyles.profileName, { color: colors.foreground }]}>{currentRide.driver.name}</Text>
+                <View style={modalStyles.profileRatingRow}>
+                  <Text style={{ fontSize: 18 }}>⭐</Text>
+                  <Text style={[modalStyles.profileRating, { color: colors.foreground }]}>{currentRide.driver.rating.toFixed(1)}</Text>
+                </View>
+              </View>
+              <View style={[modalStyles.profileDetails, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+                <View style={modalStyles.profileRow}>
+                  <Feather name="truck" size={16} color={colors.mutedForeground} />
+                  <Text style={[modalStyles.profileDetailLabel, { color: colors.mutedForeground }]}>Veículo</Text>
+                  <Text style={[modalStyles.profileDetailValue, { color: colors.foreground }]}>{currentRide.driver.car} {currentRide.driver.color}</Text>
+                </View>
+                <View style={[modalStyles.profileDivider, { backgroundColor: colors.border }]} />
+                <View style={modalStyles.profileRow}>
+                  <Feather name="credit-card" size={16} color={colors.mutedForeground} />
+                  <Text style={[modalStyles.profileDetailLabel, { color: colors.mutedForeground }]}>Placa</Text>
+                  <Text style={[modalStyles.profileDetailValue, { color: colors.primary }]}>{currentRide.driver.plate}</Text>
+                </View>
+              </View>
+              {currentRide.pin && (
+                <View style={[modalStyles.pinHighlight, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
+                  <Feather name="shield" size={18} color={colors.primary} />
+                  <View>
+                    <Text style={[{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }]}>PIN de segurança</Text>
+                    <Text style={[{ fontSize: 24, fontFamily: "Inter_700Bold", letterSpacing: 6, color: colors.primary }]}>{currentRide.pin}</Text>
+                  </View>
+                </View>
+              )}
+              <TouchableOpacity style={[modalStyles.btn, { backgroundColor: colors.primary }]} onPress={() => setShowDriverProfile(false)}>
+                <Text style={[modalStyles.btnText, { color: "#fff" }]}>Fechar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
+    </View>
   );
 }
+
+const modalStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1, padding: 24, gap: 16 },
+  title: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  subtitle: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: -8 },
+  reasons: { gap: 8 },
+  reasonBtn: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12 },
+  reasonText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  btnRow: { flexDirection: "row", gap: 10, marginTop: 4 },
+  btn: { flex: 1, height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  btnText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  profileHeader: { alignItems: "center", gap: 8 },
+  profileAvatar: { width: 80, height: 80, borderRadius: 40 },
+  profileName: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  profileRatingRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  profileRating: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  profileDetails: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  profileRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
+  profileDetailLabel: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular" },
+  profileDetailValue: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  profileDivider: { height: 1, marginHorizontal: 14 },
+  pinHighlight: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1, padding: 16 },
+});
 
 export default function PassengerHomeScreen() {
   const { user, token, apiFetch } = useAuth();
@@ -81,6 +186,10 @@ export default function PassengerHomeScreen() {
   // Espera
   const [waitFeeWarning, setWaitFeeWarning] = useState<{ feePerMin: number; message: string } | null>(null);
   const [waitFeeCharged, setWaitFeeCharged] = useState<number | null>(null);
+
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [showDriverProfile, setShowDriverProfile] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const ring1Anim = useRef(new Animated.Value(0)).current;
@@ -270,6 +379,12 @@ export default function PassengerHomeScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     cancelRide(); resetRide(); setPhase("idle"); setDestination(null); setSearchText("");
     clearPromo(); setWaitFeeCharged(null); setWaitFeeWarning(null);
+    setShowCancelModal(false);
+  }
+
+  function handleCancelWithReason() {
+    if (phase === "driver_coming") { setCancelReason(""); setShowCancelModal(true); }
+    else handleCancel();
   }
 
   async function handleRate() {
@@ -542,7 +657,7 @@ export default function PassengerHomeScreen() {
                 </Text>
               </View>
             )}
-            <View style={styles.driverCard}>
+            <TouchableOpacity style={styles.driverCard} onPress={() => setShowDriverProfile(true)} activeOpacity={0.9}>
               {currentRide.driver.photo?.startsWith("http") ? (
                 <Image source={{ uri: currentRide.driver.photo }} style={styles.driverAvatar} />
               ) : (
@@ -555,11 +670,14 @@ export default function PassengerHomeScreen() {
                 <Text style={[styles.driverMeta, { color: colors.mutedForeground }]}>⭐ {currentRide.driver.rating.toFixed(1)} · {currentRide.driver.car} {currentRide.driver.color}</Text>
                 <Text style={[styles.driverMeta, { color: colors.mutedForeground }]}>🔑 {currentRide.driver.plate}</Text>
               </View>
-              <TouchableOpacity style={[styles.chatBtn, { backgroundColor: colors.accent + "22" }]} onPress={() => { setChatOpen(true); setUnreadCount(0); }}>
-                <Feather name="message-circle" size={22} color={colors.accent} />
-                {unreadCount > 0 && <View style={[styles.badge, { backgroundColor: "#FF6B00" }]}><Text style={styles.badgeText}>{unreadCount}</Text></View>}
-              </TouchableOpacity>
-            </View>
+              <View style={{ alignItems: "center", gap: 4 }}>
+                <TouchableOpacity style={[styles.chatBtn, { backgroundColor: colors.accent + "22" }]} onPress={() => { setChatOpen(true); setUnreadCount(0); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Feather name="message-circle" size={22} color={colors.accent} />
+                  {unreadCount > 0 && <View style={[styles.badge, { backgroundColor: "#FF6B00" }]}><Text style={styles.badgeText}>{unreadCount}</Text></View>}
+                </TouchableOpacity>
+                <Text style={[{ fontSize: 9, fontFamily: "Inter_400Regular", color: colors.mutedForeground }]}>Ver perfil</Text>
+              </View>
+            </TouchableOpacity>
             {currentRide.pin && (
               <View style={[styles.pinBox, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                 <Feather name="shield" size={16} color={colors.primary} />
@@ -571,7 +689,7 @@ export default function PassengerHomeScreen() {
               <TouchableOpacity style={[styles.sosBtn, { backgroundColor: colors.destructive }]} onPress={() => { triggerSOS(); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); }} activeOpacity={0.8}>
                 <Feather name="alert-triangle" size={16} color="#fff" /><Text style={styles.sosText}>SOS</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.cancelRideBtn, { borderColor: colors.border }]} onPress={handleCancel} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.cancelRideBtn, { borderColor: colors.border }]} onPress={handleCancelWithReason} activeOpacity={0.8}>
                 <Text style={[styles.cancelRideText, { color: colors.foreground }]}>Cancelar</Text>
               </TouchableOpacity>
             </View>
@@ -609,19 +727,36 @@ export default function PassengerHomeScreen() {
 
         {phase === "rating" && (
           <View style={styles.centerContent}>
-            <View style={[styles.ratingIcon, { backgroundColor: colors.success + "22" }]}><Text style={{ fontSize: 40 }}>⭐</Text></View>
-            <Text style={[styles.findingTitle, { color: colors.foreground }]}>Corrida finalizada!</Text>
-            <Text style={[styles.findingDesc, { color: colors.mutedForeground }]}>Como foi sua experiência?</Text>
+            <View style={[styles.ratingIcon, { backgroundColor: colors.success + "22" }]}>
+              <Text style={{ fontSize: 36 }}>🏁</Text>
+            </View>
+            <Text style={[styles.findingTitle, { color: colors.foreground }]}>Corrida concluída!</Text>
+            {currentRide?.driver && (
+              <Text style={[styles.findingDesc, { color: colors.mutedForeground }]}>
+                Como foi com {currentRide.driver.name.split(" ")[0]}?
+              </Text>
+            )}
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map((s) => (
-                <TouchableOpacity key={s} onPress={() => { setSelectedStars(s); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}>
-                  <Text style={{ fontSize: 36, opacity: s <= selectedStars ? 1 : 0.3 }}>⭐</Text>
+                <TouchableOpacity key={s} onPress={() => { setSelectedStars(s); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 42, opacity: s <= selectedStars ? 1 : 0.2 }}>⭐</Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={[styles.requestBtn, { backgroundColor: colors.primary, marginTop: 20 }]} onPress={handleRate} activeOpacity={0.85}>
-              <Text style={styles.requestBtnText}>Enviar avaliação</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 12, width: "100%" }}>
+              <TouchableOpacity
+                style={[styles.cancelBtn, { flex: 1, borderWidth: 1, borderColor: colors.border }]}
+                onPress={() => { resetRide(); setPhase("idle"); setDestination(null); setSearchText(""); clearPromo(); }}
+              >
+                <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>Pular</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.requestBtn, { flex: 2, backgroundColor: colors.primary, marginTop: 0 }]}
+                onPress={handleRate} activeOpacity={0.85}
+              >
+                <Text style={styles.requestBtnText}>Enviar avaliação</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>

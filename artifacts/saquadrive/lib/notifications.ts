@@ -12,7 +12,7 @@ Notifications.setNotificationHandler({
   }),
 });
 
-const EAS_PROJECT_ID = 'c891dbd7-76fc-4255-941d-8b51d588483b';
+const EAS_PROJECT_ID = 'ae099349-2e25-4198-8cd6-33e0d33b208f';
 
 export async function registerForPushNotificationsAsync() {
   let token;
