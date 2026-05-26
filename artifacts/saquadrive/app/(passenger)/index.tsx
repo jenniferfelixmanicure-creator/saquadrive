@@ -37,7 +37,15 @@ function AnimatedDots({ anim, color }: { anim: Animated.Value; color: string }) 
         return <Animated.Text key={i} style={{ fontSize: 20, fontFamily: "Inter_700Bold", color, opacity }}>•</Animated.Text>;
       })}
     </View>
+  );
+}
 
+function PassengerHomeModals({
+  showCancelModal, setShowCancelModal, cancelReason, setCancelReason, handleCancel,
+  showDriverProfile, setShowDriverProfile, currentRide, colors
+}: any) {
+  return (
+    <>
       {/* ── CANCEL REASON MODAL ─────────────────────────────────────── */}
       <Modal visible={showCancelModal} transparent animationType="slide" onRequestClose={() => setShowCancelModal(false)}>
         <View style={modalStyles.overlay}>
@@ -117,7 +125,7 @@ function AnimatedDots({ anim, color }: { anim: Animated.Value; color: string }) 
           </View>
         </Modal>
       )}
-    </View>
+    </>
   );
 }
 
@@ -761,6 +769,17 @@ export default function PassengerHomeScreen() {
         )}
       </View>
       )}
+      <PassengerHomeModals
+        showCancelModal={showCancelModal}
+        setShowCancelModal={setShowCancelModal}
+        cancelReason={cancelReason}
+        setCancelReason={setCancelReason}
+        handleCancel={handleCancel}
+        showDriverProfile={showDriverProfile}
+        setShowDriverProfile={setShowDriverProfile}
+        currentRide={currentRide}
+        colors={colors}
+      />
     </View>
   );
 }
