@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
   const MapLibreGL = require("@maplibre/maplibre-react-native");
   const { reverseGeocode } = require("@/lib/google-maps");
+  const FACCOES_DATA = require("@/assets/data/faccoes_rj.json");
 
   const STYLE_URL = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
@@ -151,6 +152,40 @@ import React, { useEffect, useRef, useState } from "react";
                 <Text style={styles.driverEmoji}>🚗</Text>
               </View>
             </Marker>
+          )}
+
+          {FACCOES_DATA && (
+            <GeoJSONSource id="faccoes" data={FACCOES_DATA}>
+              <Layer
+                id="faccoesFill"
+                type="fill"
+                filter={["==", "$type", "Polygon"]}
+                paint={{
+                  "fill-color": ["get", "fill"],
+                  "fill-opacity": 0.4,
+                }}
+              />
+              <Layer
+                id="faccoesOutline"
+                type="line"
+                filter={["==", "$type", "Polygon"]}
+                paint={{
+                  "line-color": ["get", "stroke"],
+                  "line-width": 1,
+                }}
+              />
+              <Layer
+                id="faccoesPoints"
+                type="circle"
+                filter={["==", "$type", "Point"]}
+                paint={{
+                  "circle-radius": 4,
+                  "circle-color": ["get", "stroke"],
+                  "circle-stroke-width": 1,
+                  "circle-stroke-color": "#FFFFFF",
+                }}
+              />
+            </GeoJSONSource>
           )}
 
           {routeGeoJSON && (
