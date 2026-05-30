@@ -2,10 +2,32 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
+import twilio from "twilio";
 import { db } from "@workspace/db";
 import { usersTable, refreshTokensTable } from "@workspace/db";
 import { signAccessToken, signRefreshToken } from "../lib/auth.js";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate.js";
+
+function getTwilioClient() {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  if (!sid || !token) return null;
+  return twilio(sid, token);
+}
+
+async function sendSms(to: string, body: string): Promise<boolean> {
+  const client = getTwilioClient();
+  const from = process.env.TWILIO_PHONE_NUMBER;
+  if (!client || !from) {
+    return false;
+  }
+  try {
+    await client.messages.create({ body, from, to });
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
 
 const router = Router();
 
@@ -158,10 +180,10 @@ router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
       res.status(400).json({ message: "E-mail é obrigatório" });
       return;
     }
-    const [user] = await db.select({ id: usersTable.id, name: usersTable.name })
+    const [user] = await db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone })
       .from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
     if (!user) {
-      res.json({ message: "Se o e-mail estiver cadastrado, você receberá as instruções." });
+      res.json({ message: "Se o e-mail estiver cadastrado, você receberá um SMS com o código." });
       return;
     }
     const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -171,12 +193,24 @@ router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
       passwordResetToken: resetHash,
       passwordResetExpiresAt: expiresAt,
     }).where(eq(usersTable.id, user.id));
-    req.log.info({ userId: user.id }, "Código de recuperação gerado");
-    res.json({
-      message: "Código de recuperação gerado. Em um ambiente de produção, ele seria enviado por SMS/e-mail.",
-      resetCode,
-      hint: "Use este código no endpoint /auth/reset-password",
-    });
+
+    const phoneE164 = user.phone.replace(/\D/g, "").replace(/^0/, "+55").replace(/^55/, "+55").startsWith("+") 
+      ? user.phone.replace(/\D/g, "").replace(/^(\d{2})(\d+)$/, "+$1$2")
+      : `+55${user.phone.replace(/\D/g, "")}`;
+
+    const smsSent = await sendSms(
+      phoneE164,
+      `ZeroRisco: Seu código de recuperação de senha é ${resetCode}. Válido por 15 minutos. Não compartilhe.`
+    );
+
+    req.log.info({ userId: user.id, smsSent }, "Código de recuperação gerado");
+
+    if (smsSent) {
+      res.json({ message: "Código enviado por SMS para o telefone cadastrado." });
+    } else {
+      req.log.warn({ userId: user.id }, "SMS não enviado — Twilio não configurado ou falhou");
+      res.json({ message: "Código gerado. Configure o Twilio para envio por SMS.", resetCode });
+    }
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ message: "Erro interno" });
