@@ -40,6 +40,7 @@ type RideRequest = {
   rideType: string; price: number; distance: string; distanceKm: number;
   duration: string; pin?: string;
   passengerRating?: number; passengerTotalRides?: number; passengerPhotoUrl?: string | null;
+  promoCode?: string; promoDiscount?: number;
 };
 
 type ChatMessage = { msgId: string; senderId: string; senderName: string; text: string; timestamp: number };
@@ -56,6 +57,15 @@ type ActiveRide = {
   rideType?: string;
   startedAt?: number;
   protectionMode?: boolean;
+  promoCode?: string;
+  promoDiscount?: number;
+  driverName?: string;
+  driverCar?: string;
+  driverPlate?: string;
+  driverColor?: string;
+  driverRating?: number;
+  driverPhoto?: string;
+  rideStatus?: string;
 };
 
 const onlineDrivers = new Map<string, DriverInfo>();
@@ -68,6 +78,19 @@ const waitTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const deviationThrottle = new Map<string, number>();
 const DEVIATION_THROTTLE_MS = 30_000;
+
+const socketRateLimits = new Map<string, Map<string, number[]>>();
+
+function checkRateLimit(socketId: string, event: string, maxPerWindow: number, windowMs: number): boolean {
+  if (!socketRateLimits.has(socketId)) socketRateLimits.set(socketId, new Map());
+  const socketLimits = socketRateLimits.get(socketId)!;
+  const now = Date.now();
+  const timestamps = (socketLimits.get(event) ?? []).filter((t) => now - t < windowMs);
+  if (timestamps.length >= maxPerWindow) return false;
+  timestamps.push(now);
+  socketLimits.set(event, timestamps);
+  return true;
+}
 
 function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -134,11 +157,21 @@ async function notifyOfflineDrivers(
 
 async function loadActiveRides() {
   try {
-    const rides = await db.select({ id: ridesTable.id, passengerId: ridesTable.passengerId, driverId: ridesTable.driverId })
-      .from(ridesTable).where(eq(ridesTable.status, "in_progress"));
+    const rides = await db.select({
+      id: ridesTable.id, passengerId: ridesTable.passengerId, driverId: ridesTable.driverId,
+      promoCode: ridesTable.promoCode, promoDiscount: ridesTable.promoDiscount,
+    }).from(ridesTable).where(eq(ridesTable.status, "in_progress"));
     for (const ride of rides) {
       if (ride.passengerId && ride.driverId) {
-        activeRides.set(ride.id, { passengerId: String(ride.passengerId), driverId: String(ride.driverId), passengerSocketId: "", driverSocketId: "" });
+        activeRides.set(ride.id, {
+          passengerId: String(ride.passengerId),
+          driverId: String(ride.driverId),
+          passengerSocketId: "",
+          driverSocketId: "",
+          promoCode: ride.promoCode ?? undefined,
+          promoDiscount: ride.promoDiscount ?? undefined,
+          rideStatus: "in_progress",
+        });
       }
     }
     if (rides.length > 0) logger.info({ count: rides.length }, "Corridas ativas restauradas");
@@ -158,7 +191,7 @@ export function registerRideSocket(io: Server) {
     } catch { next(new Error("Token inválido")); }
   });
 
-  io.on("connection", (socket: Socket) => {
+  io.on("connection", async (socket: Socket) => {
     const userId = (socket as unknown as { userId?: number }).userId;
     logger.info({ socketId: socket.id, userId }, "Socket connected");
 
@@ -166,7 +199,48 @@ export function registerRideSocket(io: Server) {
       for (const [rideId, activeRide] of activeRides.entries()) {
         if (activeRide.passengerId === String(userId)) {
           activeRides.set(rideId, { ...activeRide, passengerSocketId: socket.id });
-          socket.emit("passenger:session_restored", { rideId });
+
+          try {
+            const [rideData] = await db.select({
+              status: ridesTable.status,
+              driverId: ridesTable.driverId,
+              originAddress: ridesTable.originAddress,
+              originLat: ridesTable.originLat,
+              originLng: ridesTable.originLng,
+              destinationAddress: ridesTable.destinationAddress,
+              destinationLat: ridesTable.destinationLat,
+              destinationLng: ridesTable.destinationLng,
+              rideType: ridesTable.rideType,
+              price: ridesTable.price,
+              distance: ridesTable.distance,
+              duration: ridesTable.duration,
+              pin: ridesTable.pin,
+              promoCode: ridesTable.promoCode,
+              promoDiscount: ridesTable.promoDiscount,
+              waitTimeFee: ridesTable.waitTimeFee,
+            }).from(ridesTable).where(eq(ridesTable.id, rideId));
+
+            const driver = Array.from(onlineDrivers.values()).find((d) => d.driverId === activeRide.driverId);
+
+            socket.emit("passenger:session_restored", {
+              rideId,
+              status: rideData?.status ?? "in_progress",
+              driver: driver ? {
+                id: driver.driverId, name: driver.name, rating: driver.rating,
+                car: driver.car, color: driver.color, plate: driver.plate,
+                eta: driver.eta, photo: driver.photo,
+              } : null,
+              origin: rideData ? { address: rideData.originAddress, lat: rideData.originLat, lng: rideData.originLng } : null,
+              destination: rideData ? { address: rideData.destinationAddress, lat: rideData.destinationLat, lng: rideData.destinationLng } : null,
+              price: rideData?.price,
+              pin: rideData?.pin,
+              rideType: rideData?.rideType,
+              distance: rideData?.distance,
+              duration: rideData?.duration,
+            });
+          } catch {
+            socket.emit("passenger:session_restored", { rideId });
+          }
         } else if (activeRide.driverId === String(userId)) {
           activeRides.set(rideId, { ...activeRide, driverSocketId: socket.id });
           socket.emit("driver:session_restored", { rideId });
@@ -203,6 +277,8 @@ export function registerRideSocket(io: Server) {
               const ps = io.sockets.sockets.get(waitRide.passengerSocketId);
               if (ps) ps.emit("passenger:no_drivers", { rideId: waitRideId });
               pendingRides.delete(waitRideId);
+              rideRejections.delete(waitRideId);
+              deviationThrottle.delete(waitRideId);
               nearbyForWaiting.forEach((d) => io.to(d.socketId).emit("driver:ride_cancelled_for_others", { rideId: waitRideId }));
               await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, waitRideId)).catch(() => {});
             }
@@ -217,7 +293,12 @@ export function registerRideSocket(io: Server) {
       }
     });
 
-    socket.on("passenger:request_ride", async (data: Omit<RideRequest, "passengerSocketId">) => {
+    socket.on("passenger:request_ride", async (data: Omit<RideRequest, "passengerSocketId"> & { promoCode?: string }) => {
+      if (!checkRateLimit(socket.id, "passenger:request_ride", 5, 60_000)) {
+        socket.emit("passenger:error", { code: "RATE_LIMITED", message: "Muitas solicitações. Aguarde um momento." });
+        return;
+      }
+
       if (userId && String(userId) !== String(data.passengerId)) {
         socket.emit("passenger:error", { code: "FORBIDDEN", message: "Identificação inválida." });
         return;
@@ -264,7 +345,7 @@ export function registerRideSocket(io: Server) {
       const basePrice = calculateFare(distanceKm, data.rideType, surgeMultiplier);
 
       const aiResult = await calculateSmartPrice({ distanceKm, rideType: data.rideType, hour, surgeMultiplier }).catch(() => null);
-      const serverPrice = aiResult?.suggestedFare ?? basePrice;
+      let serverPrice = aiResult?.suggestedFare ?? basePrice;
 
       const rideRisk = await assessRideRisk({
         hour,
@@ -283,6 +364,27 @@ export function registerRideSocket(io: Server) {
         });
       }
 
+      let appliedPromoCode: string | null = null;
+      let appliedPromoDiscount = 0;
+      if (data.promoCode) {
+        try {
+          const [promo] = await db.select().from(promoCodesTable)
+            .where(eq(promoCodesTable.code, data.promoCode.toUpperCase())).limit(1);
+          if (promo && promo.isActive &&
+            (!promo.expiresAt || promo.expiresAt > new Date()) &&
+            (!promo.maxUses || promo.usedCount < promo.maxUses)) {
+            appliedPromoCode = promo.code;
+            if (promo.discountType === "percent") {
+              appliedPromoDiscount = Math.round(serverPrice * promo.discountValue / 100 * 100) / 100;
+            } else {
+              appliedPromoDiscount = Math.min(promo.discountValue, serverPrice);
+            }
+            serverPrice = Math.max(0, serverPrice - appliedPromoDiscount);
+            logger.info({ rideId: data.rideId, promoCode: appliedPromoCode, discount: appliedPromoDiscount }, "Cupom aplicado");
+          }
+        } catch (err) { logger.error({ err }, "Erro ao validar cupom"); }
+      }
+
       const ridePin = data.pin ?? Math.floor(1000 + Math.random() * 9000).toString();
 
       const ride: RideRequest = {
@@ -290,6 +392,8 @@ export function registerRideSocket(io: Server) {
         passengerName: passengerNameFromDb ?? data.passengerName,
         price: serverPrice, distanceKm, passengerSocketId: socket.id, pin: ridePin,
         passengerRating, passengerTotalRides, passengerPhotoUrl,
+        promoCode: appliedPromoCode ?? undefined,
+        promoDiscount: appliedPromoDiscount > 0 ? appliedPromoDiscount : undefined,
       };
 
       pendingRides.set(data.rideId, ride);
@@ -304,6 +408,8 @@ export function registerRideSocket(io: Server) {
           rideType: data.rideType as "moto" | "basico" | "intermediario" | "vip",
           price: serverPrice, distance: data.distance, duration: data.duration,
           status: "finding", pin: ridePin,
+          promoCode: appliedPromoCode,
+          promoDiscount: appliedPromoDiscount,
         }).onConflictDoNothing();
       } catch (err) { logger.error({ err }, "Erro ao persistir corrida"); }
 
@@ -315,6 +421,7 @@ export function registerRideSocket(io: Server) {
           if (waitingRides.has(data.rideId)) {
             waitingRides.delete(data.rideId);
             pendingRides.delete(data.rideId);
+            rideRejections.delete(data.rideId);
             socket.emit("passenger:no_drivers", { rideId: data.rideId });
             await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, data.rideId)).catch(() => {});
           }
@@ -324,12 +431,19 @@ export function registerRideSocket(io: Server) {
       }
 
       nearbyDrivers.forEach((driver) => dispatchToDriver(io, ride, driver));
-      socket.emit("passenger:price_confirmed", { rideId: data.rideId, price: serverPrice, pin: ridePin });
+      socket.emit("passenger:price_confirmed", {
+        rideId: data.rideId,
+        price: serverPrice,
+        pin: ridePin,
+        promoDiscount: appliedPromoDiscount > 0 ? appliedPromoDiscount : undefined,
+      });
 
       setTimeout(async () => {
         if (pendingRides.has(data.rideId)) {
           socket.emit("passenger:no_drivers", { rideId: data.rideId });
           pendingRides.delete(data.rideId);
+          rideRejections.delete(data.rideId);
+          deviationThrottle.delete(data.rideId);
           nearbyDrivers.forEach((d) => io.to(d.socketId).emit("driver:ride_cancelled_for_others", { rideId: data.rideId }));
           await db.update(ridesTable).set({ status: "cancelled" }).where(eq(ridesTable.id, data.rideId)).catch(() => {});
         }
@@ -337,6 +451,7 @@ export function registerRideSocket(io: Server) {
     });
 
     socket.on("driver:accept", async ({ rideId }: { rideId: string }) => {
+      if (!checkRateLimit(socket.id, "driver:accept", 10, 60_000)) return;
       const ride = pendingRides.get(rideId);
       if (!ride) return;
       let acceptingDriver: DriverInfo | null = null;
@@ -356,6 +471,15 @@ export function registerRideSocket(io: Server) {
         rideType: ride.rideType,
         startedAt: Date.now(),
         protectionMode: false,
+        promoCode: ride.promoCode,
+        promoDiscount: ride.promoDiscount,
+        driverName: acceptingDriver.name,
+        driverCar: acceptingDriver.car,
+        driverPlate: acceptingDriver.plate,
+        driverColor: acceptingDriver.color,
+        driverRating: acceptingDriver.rating,
+        driverPhoto: acceptingDriver.photo,
+        rideStatus: "accepted",
       });
       try {
         await db.update(ridesTable).set({ driverId: parseInt(acceptingDriver.driverId) || null, status: "accepted" }).where(eq(ridesTable.id, rideId));
@@ -394,6 +518,7 @@ export function registerRideSocket(io: Server) {
       if (!active) return;
       const now = new Date();
       rideArrivedAt.set(rideId, now);
+      activeRides.set(rideId, { ...active, rideStatus: "picking_up" });
       logger.info({ rideId }, "Motorista chegou ao local");
       io.to(active.passengerSocketId).emit("passenger:driver_arrived", { rideId });
       await db.update(ridesTable).set({ arrivedAt: now }).where(eq(ridesTable.id, rideId)).catch(() => {});
@@ -432,7 +557,7 @@ export function registerRideSocket(io: Server) {
         io.to(active.passengerSocketId).emit("passenger:wait_fee_charged", { rideId, waitTimeFee, message: `Taxa de espera adicionada: R$ ${waitTimeFee.toFixed(2)}` });
         io.to(active.driverSocketId).emit("driver:wait_fee_info", { rideId, waitTimeFee });
       }
-      activeRides.set(rideId, { ...active, startedAt: Date.now() });
+      activeRides.set(rideId, { ...active, startedAt: Date.now(), rideStatus: "in_progress" });
       await db.update(ridesTable).set({ status: "in_progress", waitTimeFee }).where(eq(ridesTable.id, rideId)).catch(() => {});
       logger.info({ rideId, waitTimeFee }, "Viagem iniciada");
       io.to(active.passengerSocketId).emit("passenger:trip_started", { rideId, waitTimeFee });
@@ -449,9 +574,27 @@ export function registerRideSocket(io: Server) {
       activeRides.delete(rideId);
       try {
         await db.update(ridesTable).set({ status: "completed", completedAt: new Date() }).where(eq(ridesTable.id, rideId));
+
         const driverUserId = parseInt(active.driverId);
         if (!isNaN(driverUserId)) {
-          await db.update(usersTable).set({ totalRides: sql`${usersTable.totalRides} + 1` }).where(eq(usersTable.id, driverUserId));
+          await db.update(usersTable)
+            .set({ totalRides: sql`${usersTable.totalRides} + 1` })
+            .where(eq(usersTable.id, driverUserId));
+        }
+
+        const passengerUserId = parseInt(active.passengerId);
+        if (!isNaN(passengerUserId)) {
+          await db.update(usersTable)
+            .set({ totalRides: sql`${usersTable.totalRides} + 1` })
+            .where(eq(usersTable.id, passengerUserId));
+        }
+
+        if (active.promoCode) {
+          await db.update(promoCodesTable)
+            .set({ usedCount: sql`${promoCodesTable.usedCount} + 1` })
+            .where(eq(promoCodesTable.code, active.promoCode))
+            .catch(() => {});
+          logger.info({ rideId, promoCode: active.promoCode }, "Cupom usedCount incrementado");
         }
       } catch (err) { logger.error({ err }, "Erro ao finalizar corrida"); }
     });
@@ -469,7 +612,11 @@ export function registerRideSocket(io: Server) {
 
     socket.on("passenger:cancel", async ({ rideId }: { rideId: string }) => {
       if (waitingRides.has(rideId)) { const { timeoutId } = waitingRides.get(rideId)!; clearTimeout(timeoutId); waitingRides.delete(rideId); }
-      if (pendingRides.has(rideId)) { pendingRides.delete(rideId); rideRejections.delete(rideId); }
+      if (pendingRides.has(rideId)) {
+        pendingRides.delete(rideId);
+        rideRejections.delete(rideId);
+        deviationThrottle.delete(rideId);
+      }
       const active = activeRides.get(rideId);
       const isLate = active && rideArrivedAt.has(rideId);
       if (waitTimers.has(rideId)) { clearTimeout(waitTimers.get(rideId)!); waitTimers.delete(rideId); }
@@ -547,6 +694,10 @@ export function registerRideSocket(io: Server) {
     });
 
     socket.on("chat:send", async ({ rideId, senderId, senderName, text, msgId }: { rideId: string; senderId: string; senderName: string; text: string; msgId: string }) => {
+      if (!checkRateLimit(socket.id, "chat:send", 30, 60_000)) {
+        socket.emit("chat:blocked", { rideId, msgId, reason: "Você está enviando mensagens muito rápido. Aguarde um momento." });
+        return;
+      }
       const active = activeRides.get(rideId);
       if (!active) return;
       const isParticipant = socket.id === active.passengerSocketId || socket.id === active.driverSocketId;
@@ -667,6 +818,7 @@ export function registerRideSocket(io: Server) {
     });
 
     socket.on("disconnect", () => {
+      socketRateLimits.delete(socket.id);
       for (const [id, d] of onlineDrivers.entries()) {
         if (d.socketId === socket.id) { onlineDrivers.delete(id); logger.info({ driverId: id }, "Motorista desconectado"); break; }
       }

@@ -158,7 +158,7 @@ export default function PassengerHomeScreen() {
   const {
     rideStatus, currentRide, requestRide, cancelRide, rateDriver,
     resetRide, routeCoordinates, triggerSOS, driverRealtimeLocation, userLocation,
-    calculatePrice,
+    calculatePrice, riskAlert, clearRiskAlert, routeDeviation, clearRouteDeviation,
   } = useRide();
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -379,7 +379,12 @@ export default function PassengerHomeScreen() {
     if (!user?.isApproved) { alert("Sua conta ainda não foi aprovada."); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const distanceKm = Math.sqrt(Math.pow((destination.lat - origin.lat) * 111, 2) + Math.pow((destination.lng - origin.lng) * 111 * Math.cos(origin.lat * Math.PI / 180), 2));
-    requestRide(origin, destination, selectedRideType, Math.max(distanceKm, 1), user?.id ?? "guest", user?.name ?? "Passageiro");
+    requestRide(
+      origin, destination, selectedRideType, Math.max(distanceKm, 1),
+      user?.id ?? "guest", user?.name ?? "Passageiro",
+      promoCode ?? undefined,
+      promoDiscount > 0 ? promoDiscount : undefined,
+    );
     setWaitFeeCharged(null); setWaitFeeWarning(null);
   }
 
@@ -418,6 +423,47 @@ export default function PassengerHomeScreen() {
       )}
 
       <AIMonitoringPopup visible={showMonitoringPopup} onClose={() => setShowMonitoringPopup(false)} />
+
+      {/* Alerta de risco IA */}
+      <Modal visible={!!riskAlert} transparent animationType="fade" onRequestClose={clearRiskAlert}>
+        <View style={styles.suspendedOverlay}>
+          <View style={[styles.suspendedCard, { backgroundColor: colors.card, borderColor: riskAlert?.level === "critico" ? "#FF3B30" : "#FF9500", borderWidth: 1.5 }]}>
+            <View style={[styles.suspendedIcon, { backgroundColor: riskAlert?.level === "critico" ? "#FF3B3022" : "#FF950022" }]}>
+              <Feather name="shield" size={36} color={riskAlert?.level === "critico" ? "#FF3B30" : "#FF9500"} />
+            </View>
+            <Text style={[styles.suspendedTitle, { color: colors.foreground }]}>
+              {riskAlert?.level === "critico" ? "⚠️ Risco Crítico" : "⚠️ Atenção — Risco Alto"}
+            </Text>
+            <Text style={[styles.suspendedDesc, { color: colors.mutedForeground }]}>{riskAlert?.message}</Text>
+            {riskAlert?.reasons && riskAlert.reasons.length > 0 && (
+              <View style={{ width: "100%", gap: 4 }}>
+                {riskAlert.reasons.map((r, i) => (
+                  <View key={i} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                    <Feather name="alert-circle" size={12} color={colors.mutedForeground} style={{ marginTop: 3 }} />
+                    <Text style={[styles.suspendedContact, { color: colors.mutedForeground, textAlign: "left", flex: 1 }]}>{r}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <TouchableOpacity style={[styles.suspendedDismiss, { backgroundColor: colors.primary }]} onPress={clearRiskAlert} activeOpacity={0.85}>
+              <Text style={[styles.suspendedDismissText, { color: colors.primaryForeground ?? "#fff" }]}>Entendido, continuar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Alerta de desvio de rota */}
+      {routeDeviation && !routeDeviation.suspicious && (
+        <TouchableOpacity
+          style={[styles.deviationBanner, { backgroundColor: "#FF950022", borderColor: "#FF9500" }]}
+          onPress={clearRouteDeviation}
+          activeOpacity={0.85}
+        >
+          <Feather name="alert-triangle" size={14} color="#FF9500" />
+          <Text style={[styles.deviationText, { color: "#FF9500" }]}>{routeDeviation.message}</Text>
+          <Feather name="x" size={14} color="#FF9500" />
+        </TouchableOpacity>
+      )}
 
       {/* Suspensão modal */}
       <Modal visible={isSuspended} transparent animationType="slide" onRequestClose={() => {}}>
@@ -791,6 +837,8 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
   suspendedBanner: { backgroundColor: "#FF3B30", borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
   suspendedBannerText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold", flex: 1 },
+  deviationBanner: { position: "absolute", top: 100, left: 16, right: 16, zIndex: 80, borderRadius: 12, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  deviationText: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
   bottomSheet: { position: "absolute", bottom: 0, left: 0, right: 0, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, paddingHorizontal: 20, paddingTop: 20, maxHeight: "60%" },
   sheetTitle: { fontSize: 13, fontFamily: "Inter_700Bold", marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 },
   destRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, borderBottomWidth: 1 },

@@ -27,6 +27,15 @@ const registerLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === "test",
 });
 
+const forgotLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  message: { message: "Muitas tentativas de recuperação. Tente novamente em 1 hora." },
+  skip: () => process.env.NODE_ENV === "test",
+});
+
 router.post("/auth/register", registerLimiter, async (req, res) => {
   try {
     const { name, email, phone, password, role: rawRole } = req.body as {
@@ -136,6 +145,85 @@ router.post("/auth/change-password", authenticate, async (req: AuthRequest, res)
     await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
     await db.delete(refreshTokensTable).where(eq(refreshTokensTable.userId, user.id));
     res.json({ message: "Senha alterada com sucesso" });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
+  try {
+    const { email } = req.body as { email: string };
+    if (!email) {
+      res.status(400).json({ message: "E-mail é obrigatório" });
+      return;
+    }
+    const [user] = await db.select({ id: usersTable.id, name: usersTable.name })
+      .from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
+    if (!user) {
+      res.json({ message: "Se o e-mail estiver cadastrado, você receberá as instruções." });
+      return;
+    }
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetHash = await bcrypt.hash(resetCode, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    await db.update(usersTable).set({
+      passwordResetToken: resetHash,
+      passwordResetExpiresAt: expiresAt,
+    }).where(eq(usersTable.id, user.id));
+    req.log.info({ userId: user.id }, "Código de recuperação gerado");
+    res.json({
+      message: "Código de recuperação gerado. Em um ambiente de produção, ele seria enviado por SMS/e-mail.",
+      resetCode,
+      hint: "Use este código no endpoint /auth/reset-password",
+    });
+  } catch (err) {
+    req.log.error(err);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+router.post("/auth/reset-password", forgotLimiter, async (req, res) => {
+  try {
+    const { email, resetCode, newPassword } = req.body as {
+      email: string; resetCode: string; newPassword: string;
+    };
+    if (!email || !resetCode || !newPassword) {
+      res.status(400).json({ message: "E-mail, código e nova senha são obrigatórios" });
+      return;
+    }
+    if (newPassword.length < 6) {
+      res.status(400).json({ message: "Nova senha deve ter no mínimo 6 caracteres" });
+      return;
+    }
+    const [user] = await db.select({
+      id: usersTable.id,
+      passwordResetToken: usersTable.passwordResetToken,
+      passwordResetExpiresAt: usersTable.passwordResetExpiresAt,
+    }).from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
+
+    if (!user || !user.passwordResetToken || !user.passwordResetExpiresAt) {
+      res.status(400).json({ message: "Solicitação de recuperação inválida ou expirada" });
+      return;
+    }
+    if (user.passwordResetExpiresAt < new Date()) {
+      res.status(400).json({ message: "Código expirado. Solicite um novo código." });
+      return;
+    }
+    const codeValid = await bcrypt.compare(resetCode, user.passwordResetToken);
+    if (!codeValid) {
+      res.status(400).json({ message: "Código incorreto" });
+      return;
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await db.update(usersTable).set({
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+    }).where(eq(usersTable.id, user.id));
+    await db.delete(refreshTokensTable).where(eq(refreshTokensTable.userId, user.id));
+    req.log.info({ userId: user.id }, "Senha redefinida com sucesso");
+    res.json({ message: "Senha redefinida com sucesso. Faça login com a nova senha." });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ message: "Erro interno" });

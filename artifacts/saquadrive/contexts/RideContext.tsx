@@ -1,5 +1,5 @@
 import React, {
-  createContext, useContext, useEffect, useRef, useState,
+  createContext, useCallback, useContext, useEffect, useRef, useState,
 } from "react";
 import { Alert } from "react-native";
 import * as Location from "expo-location";
@@ -28,6 +28,19 @@ export type Ride = {
   isEmergencyActive?: boolean;
 };
 
+export type RiskAlert = {
+  level: "alto" | "critico";
+  message: string;
+  reasons?: string[];
+};
+
+export type RouteDeviation = {
+  rideId: string;
+  suspicious: boolean;
+  deviationKm?: number;
+  message: string;
+};
+
 export type { Location2 as Location };
 
 const RIDE_PRICES: Record<RideType, number> = {
@@ -46,7 +59,8 @@ type RideContextType = {
   refreshHistory: () => Promise<void>;
   requestRide: (
     origin: Location2, destination: Location2, rideType: RideType,
-    distanceKm: number, passengerId: string, passengerName: string
+    distanceKm: number, passengerId: string, passengerName: string,
+    promoCode?: string, promoDiscount?: number
   ) => void;
   cancelRide: () => void;
   rateDriver: (stars: number) => Promise<void>;
@@ -61,13 +75,17 @@ type RideContextType = {
   userLocation: Location2 | null;
   routeCoordinates: { latitude: number; longitude: number }[];
   driverRealtimeLocation: { latitude: number; longitude: number } | null;
+  riskAlert: RiskAlert | null;
+  clearRiskAlert: () => void;
+  routeDeviation: RouteDeviation | null;
+  clearRouteDeviation: () => void;
 };
 
 const RideContext = createContext<RideContextType>({} as RideContextType);
 
 export function RideProvider({ children }: { children: React.ReactNode }) {
   const { socket, connected } = useSocket();
-  const { apiFetch } = useAuth();
+  const { apiFetch, token } = useAuth();
   const [currentRide, setCurrentRide] = useState<Ride | null>(null);
   const [rideStatus, setRideStatus] = useState<RideStatus>("idle");
   const [history, setHistory] = useState<Ride[]>([]);
@@ -78,18 +96,30 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     latitude: number; longitude: number;
   } | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
+  const [riskAlert, setRiskAlert] = useState<RiskAlert | null>(null);
+  const [routeDeviation, setRouteDeviation] = useState<RouteDeviation | null>(null);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const currentRideRef = useRef<Ride | null>(null);
   const locationSubRef = useRef<Location.LocationSubscription | null>(null);
+  const historyLoadedRef = useRef(false);
 
   useEffect(() => {
-    loadHistoryFromAPI();
     initLocation();
     return () => {
       timersRef.current.forEach(clearTimeout);
       locationSubRef.current?.remove();
     };
   }, []);
+
+  useEffect(() => {
+    if (token && !historyLoadedRef.current) {
+      historyLoadedRef.current = true;
+      loadHistoryFromAPI();
+    }
+  }, [token]);
+
+  const clearRiskAlert = useCallback(() => setRiskAlert(null), []);
+  const clearRouteDeviation = useCallback(() => setRouteDeviation(null), []);
 
   async function loadHistoryFromAPI(cursor?: string) {
     if (historyLoading) return;
@@ -119,7 +149,9 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
 
   async function refreshHistory() {
     setHistoryNextCursor(null);
+    historyLoadedRef.current = false;
     await loadHistoryFromAPI();
+    historyLoadedRef.current = true;
   }
 
   async function initLocation() {
@@ -170,6 +202,10 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!socket) return;
 
+    socket.on("passenger:risk_alert", ({ level, message, reasons }: RiskAlert) => {
+      setRiskAlert({ level, message, reasons });
+    });
+
     socket.on("passenger:driver_found", ({ rideId, driver }: { rideId: string; driver: Driver }) => {
       setCurrentRide((prev) => {
         if (!prev || prev.id !== rideId) return prev;
@@ -218,7 +254,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       Alert.alert("Sem motoristas", "Nenhum motorista disponível na sua região agora. Tente novamente em alguns instantes.");
     });
 
-    socket.on("passenger:price_confirmed", ({ rideId, price, pin }: { rideId: string; price: number; pin: string }) => {
+    socket.on("passenger:price_confirmed", ({ rideId, price, pin, promoDiscount }: { rideId: string; price: number; pin: string; promoDiscount?: number }) => {
       setCurrentRide((prev) => {
         if (!prev || prev.id !== rideId) return prev;
         const updated = { ...prev, price, pin };
@@ -236,9 +272,38 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       Alert.alert("Atenção", message);
     });
 
-    socket.on("passenger:session_restored", ({ rideId }: { rideId: string }) => {
-      if (!currentRideRef.current || currentRideRef.current.id !== rideId) return;
-      setRideStatus(currentRideRef.current.status);
+    socket.on("passenger:session_restored", ({
+      rideId, status, driver, origin, destination, price, pin, rideType, distance, duration,
+    }: {
+      rideId: string; status?: string; driver?: Driver | null;
+      origin?: Location2 | null; destination?: Location2 | null;
+      price?: number; pin?: string; rideType?: string;
+      distance?: string | null; duration?: string | null;
+    }) => {
+      if (origin && destination && status && status !== "cancelled" && status !== "completed") {
+        const restoredStatus = (status === "accepted" || status === "finding") ? "driver_coming" : status as RideStatus;
+        const restoredRide: Ride = {
+          id: rideId,
+          origin,
+          destination,
+          status: restoredStatus,
+          driver: driver ?? undefined,
+          rideType: (rideType ?? "basico") as RideType,
+          price: price ?? 0,
+          distance: distance ?? "",
+          duration: duration ?? "",
+          createdAt: new Date().toISOString(),
+          pin,
+        };
+        setCurrentRide(restoredRide);
+        currentRideRef.current = restoredRide;
+        setRideStatus(restoredStatus);
+        if (restoredStatus === "in_progress" && origin && destination) {
+          generateRoute(origin, destination);
+        }
+      } else if (currentRideRef.current?.id === rideId) {
+        setRideStatus(currentRideRef.current.status);
+      }
     });
 
     socket.on("passenger:ride_cancelled_by_driver", ({ rideId }: { rideId: string }) => {
@@ -265,7 +330,34 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    socket.on("ride:route_deviation", (data: { rideId: string; suspicious: boolean; deviationKm?: number; message: string }) => {
+      if (currentRideRef.current?.id !== data.rideId) return;
+      setRouteDeviation(data);
+      if (data.suspicious) {
+        Alert.alert(
+          "⚠️ Desvio de rota suspeito",
+          data.message,
+          [{ text: "Entendido" }]
+        );
+      }
+    });
+
+    socket.on("ride:accident_detected", (data: {
+      rideId: string; severity: string; confidence?: number; actions?: string[]; message: string;
+    }) => {
+      if (currentRideRef.current?.id !== data.rideId) return;
+      Alert.alert(
+        "🚨 Possível acidente detectado",
+        data.message,
+        [
+          { text: "Estou bem", style: "default" },
+          { text: "Preciso de ajuda", style: "destructive", onPress: () => triggerSOS() },
+        ]
+      );
+    });
+
     return () => {
+      socket.off("passenger:risk_alert");
       socket.off("passenger:driver_found");
       socket.off("passenger:driver_arrived");
       socket.off("passenger:trip_started");
@@ -277,6 +369,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       socket.off("passenger:session_restored");
       socket.off("passenger:ride_cancelled_by_driver");
       socket.off("driver:location_update");
+      socket.off("ride:route_deviation");
+      socket.off("ride:accident_detected");
     };
   }, [socket]);
 
@@ -308,12 +402,17 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
   async function requestRide(
     origin: Location2, destination: Location2, rideType: RideType,
     distanceKm: number, passengerId: string, passengerName: string,
+    promoCode?: string, promoDiscount?: number,
   ) {
     const routeData = await generateRoute(origin, destination);
     const finalDistance = routeData ? routeData.distance : distanceKm;
     const finalDuration = routeData ? routeData.duration : calculateDuration(distanceKm);
 
-    const { total: price } = calculatePrice(finalDistance, rideType);
+    const { total: basePrice } = calculatePrice(finalDistance, rideType);
+    const price = promoCode && promoDiscount && promoDiscount > 0
+      ? Math.max(0, basePrice - promoDiscount)
+      : basePrice;
+
     const rideId = `${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
 
     const ride: Ride = {
@@ -332,6 +431,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setCurrentRide(ride);
     currentRideRef.current = ride;
     setRideStatus("finding");
+    setRiskAlert(null);
+    setRouteDeviation(null);
 
     (socket as { emit: (event: string, data: unknown) => void }).emit("passenger:request_ride", {
       rideId, passengerId, passengerName,
@@ -341,6 +442,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       distance: calculateDistance(finalDistance),
       distanceKm: finalDistance,
       duration: finalDuration,
+      ...(promoCode ? { promoCode } : {}),
     });
 
     const fallbackTimer = setTimeout(() => {
@@ -367,27 +469,32 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setRideStatus("idle");
     setRouteCoordinates([]);
     setDriverRealtimeLocation(null);
+    setRiskAlert(null);
+    setRouteDeviation(null);
   }
 
   async function rateDriver(stars: number) {
     if (!currentRide) return;
     if (currentRide.driver?.id) {
-      try {
-        const res = await apiFetch("/api/ratings", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            rideId: currentRide.id,
-            ratedId: parseInt(currentRide.driver.id),
-            stars,
-            role: "passenger",
-          }),
-        });
-        if (!res.ok && res.status !== 409) {
+      const driverId = parseInt(currentRide.driver.id);
+      if (!isNaN(driverId)) {
+        try {
+          const res = await apiFetch("/api/ratings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rideId: currentRide.id,
+              ratedId: driverId,
+              stars,
+              role: "passenger",
+            }),
+          });
+          if (!res.ok && res.status !== 409) {
+            Alert.alert("Aviso", "Não foi possível enviar sua avaliação. Tente novamente mais tarde.");
+          }
+        } catch {
           Alert.alert("Aviso", "Não foi possível enviar sua avaliação. Tente novamente mais tarde.");
         }
-      } catch {
-        Alert.alert("Aviso", "Não foi possível enviar sua avaliação. Tente novamente mais tarde.");
       }
     }
     setCurrentRide(null);
@@ -395,6 +502,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setRideStatus("idle");
     setRouteCoordinates([]);
     setDriverRealtimeLocation(null);
+    setRiskAlert(null);
+    setRouteDeviation(null);
     refreshHistory().catch(() => {});
   }
 
@@ -418,6 +527,8 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
     setRideStatus("idle");
     setRouteCoordinates([]);
     setDriverRealtimeLocation(null);
+    setRiskAlert(null);
+    setRouteDeviation(null);
   }
 
   return (
@@ -427,6 +538,7 @@ export function RideProvider({ children }: { children: React.ReactNode }) {
       rateDriver, resetRide, calculatePrice, calculateDuration,
       calculateDistance, triggerSOS, verifyPIN, userLocation,
       routeCoordinates, driverRealtimeLocation,
+      riskAlert, clearRiskAlert, routeDeviation, clearRouteDeviation,
     }}>
       {children}
     </RideContext.Provider>

@@ -298,6 +298,12 @@ export default function DriverHomeScreen() {
     if (pinInput.length !== 4) { setPinError("Digite o código de 4 dígitos mostrado ao passageiro."); return; }
     if (socket && connected) socket.emit("driver:start_trip", { rideId: activeRide.rideId, pin: pinInput });
     setShowPinModal(false); setRidePhase("in_progress"); setArrivedAt(null); setShowMonitoringPopup(true);
+    const destLoc = parseLocation(activeRide.destination);
+    if (destLoc) {
+      setTimeout(() => {
+        openNavigation(destLoc.lat, destLoc.lng, getAddressText(activeRide!.destination));
+      }, 600);
+    }
   }
 
   function handleReject(rideId: string) {

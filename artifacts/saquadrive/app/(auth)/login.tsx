@@ -168,15 +168,9 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={styles.forgotBtn}
-            onPress={() => {
-              Alert.alert(
-                "Recuperação de Senha",
-                "Para redefinir sua senha, entre em contato com o suporte pelo WhatsApp ou e-mail informado no cadastro.",
-                [{ text: "Entendi", style: "default" }]
-              );
-            }}
+            onPress={() => router.push("/(auth)/forgot-password")}
           >
-            <Text style={[styles.forgotText, { color: colors.mutedForeground }]}>
+            <Text style={[styles.forgotText, { color: colors.primary }]}>
               Esqueceu a senha?
             </Text>
           </TouchableOpacity>

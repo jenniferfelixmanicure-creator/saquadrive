@@ -33,6 +33,8 @@ export const usersTable = pgTable("users", {
   subscriptionActive: boolean("subscription_active").notNull().default(false),
   subscriptionExpiresAt: timestamp("subscription_expires_at"),
   expoPushToken: text("expo_push_token"),
+  passwordResetToken: text("password_reset_token"),
+  passwordResetExpiresAt: timestamp("password_reset_expires_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [
   index("users_role_idx").on(t.role),
