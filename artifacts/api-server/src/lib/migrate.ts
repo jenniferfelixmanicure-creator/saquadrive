@@ -151,6 +151,7 @@ export async function runMigrations(logger: Logger): Promise<void> {
   logger.info("Running database migrations...");
   const client = await pool.connect();
   try {
+    logger.info("Executing SQL Migration...");
     await client.query(SQL);
     logger.info("Database migrations completed successfully");
   } finally {
