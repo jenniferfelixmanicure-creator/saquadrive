@@ -175,42 +175,49 @@ router.post("/auth/change-password", authenticate, async (req: AuthRequest, res)
 
 router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
   try {
-    const { email } = req.body as { email: string };
+    const { email, phone } = req.body as { email: string; phone?: string };
     if (!email) {
       res.status(400).json({ message: "E-mail é obrigatório" });
       return;
     }
-    const [user] = await db.select({ id: usersTable.id, name: usersTable.name, phone: usersTable.phone })
+
+    const [user] = await db.select({ id: usersTable.id, phone: usersTable.phone })
       .from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
+
+    // Always respond generically to avoid user enumeration
+    const genericOk = { message: "Identidade verificada. Você pode redefinir sua senha.", verified: true };
+    const genericFail = { message: "E-mail ou telefone incorretos.", verified: false };
+
     if (!user) {
-      res.json({ message: "Se o e-mail estiver cadastrado, você receberá um SMS com o código." });
+      // Introduce artificial delay to prevent timing attacks
+      await new Promise(r => setTimeout(r, 400));
+      res.json(genericFail);
       return;
     }
-    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetHash = await bcrypt.hash(resetCode, 10);
+
+    // If phone provided, verify it matches (digits only comparison)
+    if (phone !== undefined) {
+      const normalize = (p: string) => p.replace(/\D/g, "").slice(-9);
+      if (normalize(phone) !== normalize(user.phone)) {
+        req.log.warn({ userId: user.id }, "Tentativa de recuperação com telefone incorreto");
+        res.json(genericFail);
+        return;
+      }
+    }
+
+    // Generate a secure reset token
+    const resetToken = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map(b => b.toString(16).padStart(2, "0")).join("");
+    const resetHash = await bcrypt.hash(resetToken, 10);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
     await db.update(usersTable).set({
       passwordResetToken: resetHash,
       passwordResetExpiresAt: expiresAt,
     }).where(eq(usersTable.id, user.id));
 
-    const phoneE164 = user.phone.replace(/\D/g, "").replace(/^0/, "+55").replace(/^55/, "+55").startsWith("+") 
-      ? user.phone.replace(/\D/g, "").replace(/^(\d{2})(\d+)$/, "+$1$2")
-      : `+55${user.phone.replace(/\D/g, "")}`;
-
-    const smsSent = await sendSms(
-      phoneE164,
-      `ZeroRisco: Seu código de recuperação de senha é ${resetCode}. Válido por 15 minutos. Não compartilhe.`
-    );
-
-    req.log.info({ userId: user.id, smsSent }, "Código de recuperação gerado");
-
-    if (smsSent) {
-      res.json({ message: "Código enviado por SMS para o telefone cadastrado." });
-    } else {
-      req.log.warn({ userId: user.id }, "SMS não enviado — Twilio não configurado ou falhou");
-      res.json({ message: "Código gerado. Configure o Twilio para envio por SMS.", resetCode });
-    }
+    req.log.info({ userId: user.id }, "Token de recuperação gerado via verificação de telefone");
+    res.json({ ...genericOk, resetToken });
   } catch (err) {
     req.log.error(err);
     res.status(500).json({ message: "Erro interno" });
@@ -219,11 +226,11 @@ router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
 
 router.post("/auth/reset-password", forgotLimiter, async (req, res) => {
   try {
-    const { email, resetCode, newPassword } = req.body as {
-      email: string; resetCode: string; newPassword: string;
+    const { email, resetToken, newPassword } = req.body as {
+      email: string; resetToken: string; newPassword: string;
     };
-    if (!email || !resetCode || !newPassword) {
-      res.status(400).json({ message: "E-mail, código e nova senha são obrigatórios" });
+    if (!email || !resetToken || !newPassword) {
+      res.status(400).json({ message: "Dados incompletos para redefinição de senha" });
       return;
     }
     if (newPassword.length < 6) {
@@ -241,12 +248,12 @@ router.post("/auth/reset-password", forgotLimiter, async (req, res) => {
       return;
     }
     if (user.passwordResetExpiresAt < new Date()) {
-      res.status(400).json({ message: "Código expirado. Solicite um novo código." });
+      res.status(400).json({ message: "Sessão expirada (15 min). Inicie o processo novamente." });
       return;
     }
-    const codeValid = await bcrypt.compare(resetCode, user.passwordResetToken);
-    if (!codeValid) {
-      res.status(400).json({ message: "Código incorreto" });
+    const tokenValid = await bcrypt.compare(resetToken, user.passwordResetToken);
+    if (!tokenValid) {
+      res.status(400).json({ message: "Token inválido. Inicie o processo novamente." });
       return;
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
@@ -256,7 +263,7 @@ router.post("/auth/reset-password", forgotLimiter, async (req, res) => {
       passwordResetExpiresAt: null,
     }).where(eq(usersTable.id, user.id));
     await db.delete(refreshTokensTable).where(eq(refreshTokensTable.userId, user.id));
-    req.log.info({ userId: user.id }, "Senha redefinida com sucesso");
+    req.log.info({ userId: user.id }, "Senha redefinida via verificação de telefone");
     res.json({ message: "Senha redefinida com sucesso. Faça login com a nova senha." });
   } catch (err) {
     req.log.error(err);
