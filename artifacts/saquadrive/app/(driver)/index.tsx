@@ -17,8 +17,10 @@ import { useSocket } from "@/contexts/SocketContext";
 import { useColors } from "@/hooks/useColors";
 import RideChat, { ChatMessage } from "@/components/RideChat";
 import AIMonitoringPopup from "@/components/AIMonitoringPopup";
-import { getRoute } from "@/lib/google-maps";
+import { getRoute, getRouteWithSteps, NavStep } from "@/lib/google-maps";
 import { sendLocalNotification } from "@/lib/notifications";
+import * as Speech from "expo-speech";
+import NavigationOverlay from "@/components/NavigationOverlay";
 
 type RideLocation = { address: string; lat: number; lng: number };
 
@@ -37,6 +39,16 @@ type RideRequest = {
   rideType: string;
   eta: number;
 };
+
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(Δφ / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function parseLocation(field: RideLocation | string): RideLocation | undefined {
   if (typeof field === "object" && field !== null && field.lat && field.lng) return field;
@@ -110,6 +122,18 @@ export default function DriverHomeScreen() {
   const floatAnim = useRef(new Animated.Value(0)).current;
   const waitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Turn-by-turn navigation state
+  const [navModeActive, setNavModeActive] = useState(false);
+  const [currentNavStep, setCurrentNavStep] = useState<NavStep | null>(null);
+  const [nextNavStep, setNextNavStep] = useState<NavStep | null>(null);
+  const [distToNextStep, setDistToNextStep] = useState(0);
+  const [totalNavRemaining, setTotalNavRemaining] = useState(0);
+  const [durationNavRemaining, setDurationNavRemaining] = useState(0);
+  const navStepsRef = useRef<NavStep[]>([]);
+  const currentStepIdxRef = useRef(0);
+  const navModeRef = useRef(false);
+  const lastSpokenRef = useRef(-1); // step index * 10 + (0=step, 1=200m warning)
+
   useEffect(() => {
     if (requests.length === 0) {
       if (countdownRef.current) { clearInterval(countdownRef.current); countdownRef.current = null; }
@@ -172,11 +196,42 @@ export default function DriverHomeScreen() {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted" || !mounted) return;
-      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 10 }, (loc) => {
+      const sub = await Location.watchPositionAsync({ accuracy: Location.Accuracy.High, distanceInterval: 8 }, (loc) => {
         const { latitude, longitude } = loc.coords;
         if (!mounted) return;
         setDriverLocation({ latitude, longitude });
         if (socket && connected && user) socket.emit("driver:update_location", { driverId: user.id, latitude, longitude });
+
+        // Turn-by-turn step tracking
+        if (navModeRef.current && navStepsRef.current.length > 0) {
+          const idx = currentStepIdxRef.current;
+          const step = navStepsRef.current[idx];
+          if (!step) return;
+
+          const dist = haversineMeters(latitude, longitude, step.coordinate.latitude, step.coordinate.longitude);
+          setDistToNextStep(dist);
+
+          // 200m warning
+          const warn200Key = idx * 10 + 1;
+          if (dist <= 220 && dist > 60 && lastSpokenRef.current !== warn200Key) {
+            lastSpokenRef.current = warn200Key;
+            const d = Math.round(dist / 10) * 10;
+            Speech.speak(`Em ${d} metros, ${step.instruction}`, { language: "pt-BR", rate: 0.9 });
+          }
+
+          // Advance to next step
+          if (dist < 40 && idx < navStepsRef.current.length - 1) {
+            const nextIdx = idx + 1;
+            const nextStep = navStepsRef.current[nextIdx];
+            currentStepIdxRef.current = nextIdx;
+            lastSpokenRef.current = -1;
+            setCurrentNavStep(nextStep);
+            setNextNavStep(navStepsRef.current[nextIdx + 1] ?? null);
+            setTotalNavRemaining(nextStep.remainingDistance);
+            setDurationNavRemaining(nextStep.remainingDuration);
+            Speech.speak(nextStep.instruction, { language: "pt-BR", rate: 0.9 });
+          }
+        }
       });
       locationSub.current = sub;
     })();
@@ -245,22 +300,39 @@ export default function DriverHomeScreen() {
     };
   }, [socket, isOnline, activeRide, chatOpen]);
 
-  // Rota
+  // Rota (e steps de navegação quando in_progress)
   useEffect(() => {
     if (!activeRide || !driverLocation) { setRouteCoords([]); return; }
-    async function buildRoute() {
-      if (!activeRide || !driverLocation) return;
-      const pickupLoc = parseLocation(activeRide.origin);
-      if (ridePhase === "picking_up" && pickupLoc) {
-        const result = await getRoute({ lat: driverLocation.latitude, lng: driverLocation.longitude }, { lat: pickupLoc.lat, lng: pickupLoc.lng });
-        if (result) setRouteCoords(result.polylineCoords);
-      } else if (ridePhase === "in_progress") {
-        const destLoc = parseLocation(activeRide.destination);
-        if (pickupLoc && destLoc) { const result = await getRoute({ lat: pickupLoc.lat, lng: pickupLoc.lng }, { lat: destLoc.lat, lng: destLoc.lng }); if (result) setRouteCoords(result.polylineCoords); }
-      }
+    const pickupLoc = parseLocation(activeRide.origin);
+    const destLoc = parseLocation(activeRide.destination);
+    const origin = { lat: driverLocation.latitude, lng: driverLocation.longitude };
+
+    if (ridePhase === "picking_up" && pickupLoc) {
+      getRoute(origin, { lat: pickupLoc.lat, lng: pickupLoc.lng }).then((r) => {
+        if (r) setRouteCoords(r.polylineCoords);
+      });
+    } else if (ridePhase === "in_progress" && destLoc) {
+      // Fetch com steps para turn-by-turn
+      getRouteWithSteps(origin, { lat: destLoc.lat, lng: destLoc.lng }).then((r) => {
+        if (!r) return;
+        setRouteCoords(r.polylineCoords);
+        if (r.steps.length > 0) {
+          navStepsRef.current = r.steps;
+          currentStepIdxRef.current = 0;
+          navModeRef.current = true;
+          lastSpokenRef.current = -1;
+          setNavModeActive(true);
+          setCurrentNavStep(r.steps[0]);
+          setNextNavStep(r.steps[1] ?? null);
+          setDistToNextStep(r.steps[0].distance);
+          setTotalNavRemaining(r.distance * 1000);
+          setDurationNavRemaining(r.totalDurationSec);
+          // Announce first instruction
+          Speech.speak(r.steps[0].instruction, { language: "pt-BR", rate: 0.9 });
+        }
+      });
     }
-    buildRoute();
-  }, [activeRide?.rideId, ridePhase, driverLocation?.latitude, driverLocation?.longitude]);
+  }, [activeRide?.rideId, ridePhase]);
 
   function openNavigation(lat: number, lng: number, label: string) {
     const wazeUrl = `waze://?ll=${lat},${lng}&navigate=yes`;
@@ -272,11 +344,25 @@ export default function DriverHomeScreen() {
     }).catch(() => { Linking.openURL(googleMapsUrl); });
   }
 
-    function handleToggle() {
+    function resetNavState() {
+    navStepsRef.current = [];
+    currentStepIdxRef.current = 0;
+    navModeRef.current = false;
+    lastSpokenRef.current = -1;
+    setNavModeActive(false);
+    setCurrentNavStep(null);
+    setNextNavStep(null);
+    setDistToNextStep(0);
+    setTotalNavRemaining(0);
+    setDurationNavRemaining(0);
+    Speech.stop();
+  }
+
+  function handleToggle() {
     if (!isOnline && !user?.isApproved) { setShowNotApprovedModal(true); return; }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const next = !isOnline; setIsOnline(next);
-    if (!next) { setRequests([]); setActiveRide(null); setRidePhase("idle"); setRouteCoords([]); phaseTimers.current.forEach(clearTimeout); phaseTimers.current = []; setArrivedAt(null); }
+    if (!next) { setRequests([]); setActiveRide(null); setRidePhase("idle"); setRouteCoords([]); phaseTimers.current.forEach(clearTimeout); phaseTimers.current = []; setArrivedAt(null); resetNavState(); }
   }
 
   function handleAccept(req: RideRequest) {
@@ -298,12 +384,7 @@ export default function DriverHomeScreen() {
     if (pinInput.length !== 4) { setPinError("Digite o código de 4 dígitos mostrado ao passageiro."); return; }
     if (socket && connected) socket.emit("driver:start_trip", { rideId: activeRide.rideId, pin: pinInput });
     setShowPinModal(false); setRidePhase("in_progress"); setArrivedAt(null); setShowMonitoringPopup(true);
-    const destLoc = parseLocation(activeRide.destination);
-    if (destLoc) {
-      setTimeout(() => {
-        openNavigation(destLoc.lat, destLoc.lng, getAddressText(activeRide!.destination));
-      }, 600);
-    }
+    // Navigation will start automatically via the route building effect
   }
 
   function handleReject(rideId: string) {
@@ -320,6 +401,7 @@ export default function DriverHomeScreen() {
     const finishedRideId = activeRide.rideId;
     const finishedPassengerId = activeRide.passengerId;
     const finishedPassengerName = activeRide.passenger ?? "Passageiro";
+    resetNavState();
     setActiveRide(null); setRidePhase("idle"); setRouteCoords([]); setChatMessages([]); setUnreadCount(0); setArrivedAt(null);
     if (finishedPassengerId) {
       setPendingRating({ rideId: finishedRideId, passengerId: finishedPassengerId, passengerName: finishedPassengerName });
@@ -356,6 +438,7 @@ export default function DriverHomeScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         if (socket && connected) socket.emit("driver:cancel", { rideId: activeRide.rideId });
         phaseTimers.current.forEach(clearTimeout); phaseTimers.current = [];
+        resetNavState();
         setActiveRide(null); setRidePhase("idle"); setRouteCoords([]); setChatMessages([]); setUnreadCount(0); setArrivedAt(null);
       }},
     ]);
@@ -379,7 +462,27 @@ export default function DriverHomeScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {user?.mode === "driver" && user?.subscriptionActive === false && <SubscriptionLock expiresAt={user?.subscriptionExpiresAt} />}
       {activeRide && <SOSButton onPress={() => socket?.emit("driver:sos", { rideId: activeRide.rideId })} />}
-      <AppMap isOnline={isOnline} mode="driver" origin={mapOrigin} destination={mapDestination} originColor={colors.success} destColor={ridePhase === "picking_up" ? colors.primary : colors.accent} routeCoordinates={routeCoords} markerColor={isOnline ? colors.accent : colors.border} />
+      <AppMap
+        isOnline={isOnline}
+        mode="driver"
+        origin={mapOrigin}
+        destination={mapDestination}
+        originColor={colors.success}
+        destColor={ridePhase === "picking_up" ? colors.primary : colors.accent}
+        routeCoordinates={routeCoords}
+        markerColor={isOnline ? colors.accent : colors.border}
+        navigationMode={navModeActive}
+      />
+      {navModeActive && currentNavStep && (
+        <NavigationOverlay
+          step={currentNavStep}
+          nextStep={nextNavStep}
+          distanceToStep={distToNextStep}
+          totalRemaining={totalNavRemaining}
+          durationRemaining={durationNavRemaining}
+          onClose={resetNavState}
+        />
+      )}
 
       <View style={[styles.topBar, { paddingTop: topPad + 8 }]}>
         <View style={[styles.statusPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -553,19 +656,53 @@ export default function DriverHomeScreen() {
 
             {ridePhase === "in_progress" && (
               <>
-              {(() => {
-                const destLoc = activeRide ? parseLocation(activeRide.destination) : undefined;
-                return destLoc ? (
+              {/* Navigation controls */}
+              <View style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
+                {!navModeActive && (
                   <TouchableOpacity
-                    style={[styles.navBtn, { backgroundColor: colors.success + "22", borderColor: colors.success + "55", marginBottom: 10 }]}
-                    onPress={() => openNavigation(destLoc.lat, destLoc.lng, getAddressText(activeRide!.destination))}
+                    style={[styles.navBtn, { flex: 1, backgroundColor: colors.success + "22", borderColor: colors.success + "55" }]}
+                    onPress={() => {
+                      const destLoc = parseLocation(activeRide!.destination);
+                      if (destLoc && driverLocation) {
+                        getRouteWithSteps(
+                          { lat: driverLocation.latitude, lng: driverLocation.longitude },
+                          { lat: destLoc.lat, lng: destLoc.lng }
+                        ).then((r) => {
+                          if (!r || r.steps.length === 0) return;
+                          navStepsRef.current = r.steps;
+                          currentStepIdxRef.current = 0;
+                          navModeRef.current = true;
+                          lastSpokenRef.current = -1;
+                          setNavModeActive(true);
+                          setCurrentNavStep(r.steps[0]);
+                          setNextNavStep(r.steps[1] ?? null);
+                          setDistToNextStep(r.steps[0].distance);
+                          setTotalNavRemaining(r.distance * 1000);
+                          setDurationNavRemaining(r.totalDurationSec);
+                          Speech.speak(r.steps[0].instruction, { language: "pt-BR", rate: 0.9 });
+                        });
+                      }
+                    }}
                     activeOpacity={0.85}
                   >
-                    <Feather name="navigation" size={16} color={colors.success} />
-                    <Text style={[styles.navBtnText, { color: colors.success }]}>Navegar até o destino</Text>
+                    <Feather name="navigation" size={15} color={colors.success} />
+                    <Text style={[styles.navBtnText, { color: colors.success }]}>Nav. no app</Text>
                   </TouchableOpacity>
-                ) : null;
-              })()}
+                )}
+                {(() => {
+                  const destLoc = activeRide ? parseLocation(activeRide.destination) : undefined;
+                  return destLoc ? (
+                    <TouchableOpacity
+                      style={[styles.navBtn, { flex: navModeActive ? 1 : undefined, width: navModeActive ? undefined : 46, backgroundColor: "rgba(255,255,255,0.06)", borderColor: colors.border }]}
+                      onPress={() => openNavigation(destLoc.lat, destLoc.lng, getAddressText(activeRide!.destination))}
+                      activeOpacity={0.85}
+                    >
+                      <Feather name="map" size={15} color={colors.mutedForeground} />
+                      {navModeActive && <Text style={[styles.navBtnText, { color: colors.mutedForeground }]}>Waze / Maps</Text>}
+                    </TouchableOpacity>
+                  ) : null;
+                })()}
+              </View>
               <TouchableOpacity style={[styles.finishBtn, { backgroundColor: colors.success }]} onPress={handleFinishRide} activeOpacity={0.85}>
                 <Feather name="check-circle" size={18} color="#fff" />
                 <Text style={styles.finishText}>Finalizar corrida</Text>

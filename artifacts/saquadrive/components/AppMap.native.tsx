@@ -21,6 +21,7 @@ import React, { useEffect, useRef, useState } from "react";
     driverRealtimeLocation?: { latitude: number; longitude: number } | null;
     onMapPress?: (loc: { address: string; lat: number; lng: number }) => void;
     onCenterChange?: (lat: number, lng: number) => void;
+    navigationMode?: boolean;   // heading-up camera follow for turn-by-turn
   };
 
   function MapLibreMap(props: Props) {
@@ -28,6 +29,7 @@ import React, { useEffect, useRef, useState } from "react";
       origin, destination,
       originColor = "#00C4FF", destColor = "#0A7AFF",
       routeCoordinates, driverRealtimeLocation, onMapPress, onCenterChange,
+      navigationMode = false,
     } = props;
 
     const cameraRef = useRef<any>(null);
@@ -39,6 +41,8 @@ import React, { useEffect, useRef, useState } from "react";
       : [-42.51, -22.92];
 
     useEffect(() => {
+      // In navigation mode the Camera component handles following automatically
+      if (navigationMode) return;
       if (!cameraRef.current) return;
       try {
         if (routeCoordinates && routeCoordinates.length > 1) {
@@ -67,6 +71,7 @@ import React, { useEffect, useRef, useState } from "react";
         // Ignora erros de câmera para não travar o app
       }
     }, [
+      navigationMode,
       origin?.lat, origin?.lng,
       destination?.lat, destination?.lng,
       driverRealtimeLocation?.latitude, driverRealtimeLocation?.longitude,
@@ -118,11 +123,21 @@ import React, { useEffect, useRef, useState } from "react";
           onPress={onMapPress ? handleMapPress : undefined}
           onRegionDidChange={onCenterChange ? handleRegionDidChange : undefined}
         >
-          <Camera
-            ref={cameraRef}
-            center={center}
-            zoom={14}
-          />
+          {navigationMode ? (
+            <Camera
+              ref={cameraRef}
+              followUserLocation={true}
+              followUserMode="course"
+              followZoomLevel={17}
+              animationDuration={300}
+            />
+          ) : (
+            <Camera
+              ref={cameraRef}
+              center={center}
+              zoom={14}
+            />
+          )}
 
           <UserLocation visible={true} />
 
