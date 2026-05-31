@@ -89,9 +89,9 @@ router.post("/auth/register", registerLimiter, async (req, res) => {
       token, refreshToken,
       user: { id: String(user.id), name: user.name, email: user.email, phone: user.phone, isApproved: user.isApproved, rgStatus: user.rgStatus },
     });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
+    res.status(500).json({ message: `Erro interno: ${err.message}` });
   }
 });
 
@@ -102,8 +102,10 @@ router.post("/auth/login", authLimiter, async (req, res) => {
       res.status(400).json({ message: "E-mail e senha são obrigatórios" });
       return;
     }
+    req.log.info({ email }, "Tentativa de login");
     const [user] = await db.select().from(usersTable)
       .where(eq(usersTable.email, email.toLowerCase())).limit(1);
+    req.log.info({ found: !!user }, "Resultado busca usuário");
     if (!user) {
       res.status(401).json({ message: "E-mail ou senha incorretos" });
       return;
@@ -120,9 +122,9 @@ router.post("/auth/login", authLimiter, async (req, res) => {
       token, refreshToken,
       user: { id: String(user.id), name: user.name, email: user.email, phone: user.phone, isApproved: user.isApproved, rgStatus: user.rgStatus, profilePhotoUrl: user.profilePhotoUrl },
     });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
+    res.status(500).json({ message: `Erro interno: ${err.message}` });
   }
 });
 
@@ -143,9 +145,9 @@ router.post("/auth/refresh", authLimiter, async (req, res) => {
     await db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
     await db.insert(refreshTokensTable).values({ userId: user.id, token: newRefresh, expiresAt });
     res.json({ token: newToken, refreshToken: newRefresh });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
+    res.status(500).json({ message: `Erro interno: ${err.message}` });
   }
 });
 
@@ -167,9 +169,9 @@ router.post("/auth/change-password", authenticate, async (req: AuthRequest, res)
     await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
     await db.delete(refreshTokensTable).where(eq(refreshTokensTable.userId, user.id));
     res.json({ message: "Senha alterada com sucesso" });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
+    res.status(500).json({ message: `Erro interno: ${err.message}` });
   }
 });
 
@@ -218,9 +220,9 @@ router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
 
     req.log.info({ userId: user.id }, "Token de recuperação gerado via verificação de telefone");
     res.json({ ...genericOk, resetToken });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
+    res.status(500).json({ message: `Erro interno: ${err.message}` });
   }
 });
 
@@ -265,9 +267,9 @@ router.post("/auth/reset-password", forgotLimiter, async (req, res) => {
     await db.delete(refreshTokensTable).where(eq(refreshTokensTable.userId, user.id));
     req.log.info({ userId: user.id }, "Senha redefinida via verificação de telefone");
     res.json({ message: "Senha redefinida com sucesso. Faça login com a nova senha." });
-  } catch (err) {
-    req.log.error(err);
-    res.status(500).json({ message: "Erro interno" });
+  } catch (err: any) {
+    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
+    res.status(500).json({ message: `Erro interno: ${err.message}` });
   }
 });
 
