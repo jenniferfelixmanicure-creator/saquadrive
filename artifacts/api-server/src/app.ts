@@ -31,6 +31,15 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
+app.get("/db-migrate", async (req, res) => {
+  const { runMigrations } = await import("./lib/migrate.js");
+  try {
+    await runMigrations(logger);
+    res.json({ message: "Migração executada com sucesso!" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
 
 export const httpServer = createServer(app);
 
