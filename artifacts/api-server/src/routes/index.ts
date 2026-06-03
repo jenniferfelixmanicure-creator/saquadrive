@@ -1,22 +1,24 @@
-import { Router, type IRouter } from "express";
-import healthRouter from "./health.js";
-import authRouter from "./auth.js";
-import usersRouter from "./users.js";
-import ridesRouter from "./rides.js";
-import ratingsRouter from "./ratings.js";
-import adminRouter from "./admin.js";
-import documentsRouter from "./documents.js";
-import aiRouter from "./ai.js";
+import { Router } from "express";
+import authRoutes from "./auth.js";
+import authNewRoutes from "./auth_new.js";
+import userRoutes from "./users.js";
+import rideRoutes from "./rides.js";
+import ratingRoutes from "./ratings.js";
+import adminRoutes from "./admin.js";
+import aiRoutes from "./ai.js";
+import documentRoutes from "./documents.js";
+import healthRoutes from "./health.js";
 
-const router: IRouter = Router();
+const router = Router();
 
-router.use(healthRouter);
-router.use(authRouter);
-router.use(usersRouter);
-router.use(ridesRouter);
-router.use(ratingsRouter);
-router.use(documentsRouter);
-router.use(adminRouter);
-router.use(aiRouter);
+router.use(authRoutes);
+router.use(authNewRoutes); // Adicionando a nova lógica de recuperação
+router.use(userRoutes);
+router.use(rideRoutes);
+router.use(ratingRoutes);
+router.use(adminRoutes);
+router.use(aiRoutes);
+router.use(documentRoutes);
+router.use(healthRoutes);
 
 export default router;

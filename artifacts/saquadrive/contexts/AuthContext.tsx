@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { Session } from '@supabase/supabase-js';
 import { API_URL } from "@/constants/api";
+import { supabase } from "../lib/supabase";
 import { registerForPushNotificationsAsync } from "@/lib/notifications";
 
 export type AppMode = "passenger" | "driver";
@@ -35,10 +37,13 @@ export type User = {
 type AuthContextType = {
   user: User | null;
   token: string | null;
+  supabaseSession: Session | null;
   mode: AppMode | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithSupabase: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, phone: string, password: string, role?: string) => Promise<void>;
+  registerWithSupabase: (name: string, email: string, phone: string, password: string, role?: string) => Promise<void>;
   logout: () => Promise<void>;
   setMode: (mode: AppMode) => void;
   updateUser: (updates: Partial<User>) => Promise<void>;
@@ -108,6 +113,7 @@ async function registerPushToken(authToken: string): Promise<void> {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [mode, setModeState] = useState<AppMode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -119,36 +125,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function loadSession() {
-    fetchWithTimeout(`${API_URL}/api/healthz`, {}, 3000).catch(() => {});
     try {
-      const [storedUser, storedToken, storedRefresh, storedMode] = await Promise.all([
-        AsyncStorage.getItem(USER_KEY), AsyncStorage.getItem(TOKEN_KEY),
-        AsyncStorage.getItem(REFRESH_TOKEN_KEY), AsyncStorage.getItem(MODE_KEY),
-      ]);
-      let activeToken = storedToken;
-      if (storedToken && storedRefresh) {
-        const expiry = decodeJwtExpiry(storedToken);
-        const expiresIn = expiry ? expiry - Date.now() : 0;
-        if (expiresIn < 24 * 60 * 60 * 1000) {
-          const refreshResult = await withHardTimeout(fetchWithTimeout(`${API_URL}/api/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: storedRefresh }) }, 4000), 4500);
-          if (refreshResult && refreshResult.ok) {
-            try {
-              const data = await refreshResult.json() as { token: string; refreshToken: string };
-              activeToken = data.token;
-              await Promise.all([AsyncStorage.setItem(TOKEN_KEY, data.token), AsyncStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken)]);
-              setRefreshToken(data.refreshToken);
-            } catch {}
-          } else if (refreshResult && (refreshResult.status === 401 || refreshResult.status === 403)) {
-            await Promise.all([AsyncStorage.removeItem(TOKEN_KEY), AsyncStorage.removeItem(REFRESH_TOKEN_KEY), AsyncStorage.removeItem(USER_KEY), AsyncStorage.removeItem(MODE_KEY)]).catch(() => {});
-            activeToken = null;
-          } else if (!refreshResult && expiresIn <= 0) { activeToken = null; }
-          else { setRefreshToken(storedRefresh ?? null); }
-        } else { setRefreshToken(storedRefresh); }
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (session) {
+        setSupabaseSession(session);
+        setToken(session.access_token);
+        // Fetch user profile from your backend using the Supabase token
+        const res = await fetchWithTimeout(`${API_URL}/api/users/me`, { headers: { Authorization: `Bearer ${session.access_token}` } }, 8000);
+        if (res.ok) {
+          const profile = await res.json() as User;
+          setUser(profile);
+        }
       }
-      if (storedUser) { try { setUser(JSON.parse(storedUser)); } catch {} }
-      if (activeToken) setToken(activeToken);
+      const storedMode = await AsyncStorage.getItem(MODE_KEY);
       if (storedMode) setModeState(storedMode as AppMode);
-    } catch {}
+    } catch (err) {
+      console.error("Error loading session:", err);
+    }
   }
 
   async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -181,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function login(email: string, password: string) {
+    // This is the old login function, keeping it for now if needed for backend-only auth
     const res = await fetchWithTimeout(`${API_URL}/api/auth/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) }, 15000);
     const data = await res.json() as AuthResponse & { message?: string };
     if (!res.ok) throw new Error(data.message ?? "Erro desconhecido");
@@ -197,11 +191,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch {}
     setUser(userData); setToken(data.token);
-    // Registra token de push em background (não bloqueia o login)
     registerPushToken(data.token);
   }
 
+  async function loginWithSupabase(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    if (data.session) {
+      setSupabaseSession(data.session);
+      setToken(data.session.access_token);
+      // Fetch user profile from your backend using the Supabase token
+      const res = await fetchWithTimeout(`${API_URL}/api/users/me`, { headers: { Authorization: `Bearer ${data.session.access_token}` } }, 8000);
+      if (res.ok) {
+        const profile = await res.json() as User;
+        setUser(profile);
+      } else {
+        throw new Error("Failed to fetch user profile from backend.");
+      }
+      registerPushToken(data.session.access_token);
+    }
+  }
+
   async function register(name: string, email: string, phone: string, password: string, role = "passenger") {
+    // This is the old register function, keeping it for now if needed for backend-only auth
     const res = await fetchWithTimeout(`${API_URL}/api/auth/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, email, phone, password, role }) }, 15000);
     const data = await res.json() as AuthResponse & { message?: string };
     if (!res.ok) throw new Error(data.message ?? "Erro desconhecido");
@@ -214,13 +226,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileRes.ok) { const profile = await profileRes.json() as Partial<User>; Object.assign(userData, { driverRating: profile.driverRating, totalRides: profile.totalRides, cnhStatus: profile.cnhStatus, crlvStatus: profile.crlvStatus, rgStatus: profile.rgStatus ?? userData.rgStatus, vehiclePlate: profile.vehiclePlate, vehicleModel: profile.vehicleModel, vehicleType: profile.vehicleType, vehicleYear: profile.vehicleYear }); await AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)); }
     } catch {}
     setUser(userData); setToken(data.token);
-    // Registra token de push em background
     registerPushToken(data.token);
   }
 
+  async function registerWithSupabase(name: string, email: string, phone: string, password: string, role = "passenger") {
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name, phone, role } } });
+    if (error) throw new Error(error.message);
+    if (data.session) {
+      setSupabaseSession(data.session);
+      setToken(data.session.access_token);
+      // After successful Supabase registration, create user in your backend
+      const res = await fetchWithTimeout(`${API_URL}/api/auth/register`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.session.access_token}` }, body: JSON.stringify({ name, email, phone, password, role }) }, 15000);
+      const backendData = await res.json() as AuthResponse & { message?: string };
+      if (!res.ok) throw new Error(backendData.message ?? "Erro ao registrar usuário no backend.");
+      const userData: User = { id: backendData.user.id, name: backendData.user.name, email: backendData.user.email, phone: backendData.user.phone, isApproved: backendData.user.isApproved, rgStatus: backendData.user.rgStatus as User["rgStatus"], passengerRating: 5.0, profilePhotoUrl: backendData.user.profilePhotoUrl };
+      setUser(userData);
+      registerPushToken(data.session.access_token);
+    }
+  }
+
   async function logout() {
+    await supabase.auth.signOut();
     await Promise.all([AsyncStorage.removeItem(USER_KEY), AsyncStorage.removeItem(TOKEN_KEY), AsyncStorage.removeItem(REFRESH_TOKEN_KEY), AsyncStorage.removeItem(MODE_KEY)]).catch(() => {});
-    setUser(null); setToken(null); setRefreshToken(null); setModeState(null);
+    setUser(null); setToken(null); setRefreshToken(null); setModeState(null); setSupabaseSession(null);
   }
 
   function setMode(m: AppMode) { setModeState(m); AsyncStorage.setItem(MODE_KEY, m).catch(() => {}); }
@@ -243,7 +271,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, mode, isLoading, login, register, logout, setMode, updateUser, updateUserDocuments, apiFetch }}>
+    <AuthContext.Provider value={{ user, token, supabaseSession, mode, isLoading, login, loginWithSupabase, register, registerWithSupabase, logout, setMode, updateUser, updateUserDocuments, apiFetch }}>
       {children}
     </AuthContext.Provider>
   );

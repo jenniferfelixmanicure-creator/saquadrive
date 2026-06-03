@@ -19,7 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { AppMode } from "@/contexts/AuthContext";
 
 export default function RegisterScreen() {
-  const { register, setMode } = useAuth();
+  const { registerWithSupabase, setMode } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ mode: AppMode }>();
@@ -43,7 +43,7 @@ export default function RegisterScreen() {
     setLoading(true);
     try {
       const mode = params.mode ?? "passenger";
-      await register(name.trim(), email.trim(), phone.trim(), password, mode);
+      await registerWithSupabase(name.trim(), email.trim(), phone.trim(), password, mode);
       setMode(mode);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (mode === "driver") {

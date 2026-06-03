@@ -26,7 +26,7 @@ export default function ForgotPasswordScreen() {
   const [step, setStep] = useState<Step>("verify");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [resetToken, setResetToken] = useState("");
+  const [userId, setUserId] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -42,18 +42,18 @@ export default function ForgotPasswordScreen() {
     if (!phone.trim()) { setError("Digite o telefone cadastrado"); return; }
     setError(""); setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/forgot-password`, {
+      const res = await fetch(`${API_URL}/auth/forgot-password-direct`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim().toLowerCase(), phone: phone.trim() }),
       });
-      const data = await res.json() as { message?: string; verified?: boolean; resetToken?: string };
-      if (!data.verified || !data.resetToken) {
+      const data = await res.json() as { message?: string; verified?: boolean; userId?: number };
+      if (!data.verified || !data.userId) {
         setError(data.message ?? "E-mail ou telefone incorretos");
         return;
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setResetToken(data.resetToken);
+      setUserId(data.userId);
       setStep("newpass");
     } catch {
       setError("Sem conexão. Verifique sua internet e tente novamente.");
@@ -67,10 +67,10 @@ export default function ForgotPasswordScreen() {
     if (newPassword !== confirmPassword) { setError("As senhas não coincidem"); return; }
     setError(""); setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/auth/reset-password`, {
+      const res = await fetch(`${API_URL}/auth/reset-password-direct`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), resetToken, newPassword }),
+        body: JSON.stringify({ userId, newPassword }),
       });
       const data = await res.json() as { message?: string };
       if (!res.ok) { setError(data.message ?? "Erro ao redefinir senha"); return; }
@@ -245,7 +245,7 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-function ErrorBox({ error, colors }: { error: string; colors: ReturnType<typeof useColors> }) {
+function ErrorBox({ error, colors }: { error: string; colors: any }) {
   return (
     <View style={[styles.errorBox, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive + "44" }]}>
       <Feather name="alert-circle" size={14} color={colors.destructive} />

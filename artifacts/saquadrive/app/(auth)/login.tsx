@@ -29,7 +29,7 @@ function decodeJwtRole(token: string): string | null {
 }
 
 export default function LoginScreen() {
-  const { login, setMode } = useAuth();
+  const { loginWithSupabase, setMode } = useAuth();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ mode: AppMode }>();
@@ -51,7 +51,7 @@ export default function LoginScreen() {
     setError("");
     setLoading(true);
     try {
-      await login(email.trim(), password);
+      await loginWithSupabase(email.trim(), password);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       let role: string | null = null;

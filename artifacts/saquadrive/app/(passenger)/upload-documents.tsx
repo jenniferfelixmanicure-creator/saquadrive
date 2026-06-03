@@ -6,6 +6,7 @@ import {
 import { router } from "expo-router";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 import * as ImagePicker from "expo-image-picker";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,7 +16,7 @@ type DocType = "rg" | "cnh" | "crlv";
 export default function UploadDocumentsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { user, apiFetch, updateUserDocuments } = useAuth();
+  const { user, updateUserDocuments } = useAuth();
   const [loading, setLoading] = useState<DocType | null>(null);
   const [rgUri, setRgUri] = useState<string | null>(user?.rgUrl ?? null);
   const [cnhUri, setCnhUri] = useState<string | null>(user?.cnhUrl ?? null);
@@ -51,27 +52,30 @@ export default function UploadDocumentsScreen() {
       const ext = filename.split(".").pop() ?? "jpg";
       formData.append("file", { uri, name: filename, type: `image/${ext}` } as unknown as Blob);
 
-      let endpoint = "";
-      if (docType === "rg") endpoint = `/api/documents/upload-rg`;
-      else if (docType === "cnh") endpoint = `/api/documents/upload-cnh`;
-      else endpoint = `/api/documents/upload-crlv`;
+      const bucketName = "passenger-documents"; // Ou outro nome de bucket apropriado
+      const filePath = `${user?.id}/${docType}-${Date.now()}.${ext}`;
 
-      const res = await apiFetch(endpoint, {
-        method: "POST",
-        body: formData,
-      });
+      const { data, error } = await supabase.storage.from(bucketName).upload(filePath, { uri, name: filename, type: `image/${ext}` } as unknown as File, { cacheControl: '3600', upsert: false });
 
-      const data = await res.json();
-      if (res.ok) {
-        Alert.alert("Enviado!", data.message ?? "Documento enviado para análise.");
-        const update: Partial<typeof user> = {};
-        if (docType === "rg") { update.rgStatus = "pending"; update.rgUrl = uri; }
-        else if (docType === "cnh") { update.cnhStatus = "pending"; update.cnhUrl = uri; }
-        else { update.crlvStatus = "pending"; update.crlvUrl = uri; }
-        await updateUserDocuments(update);
-      } else {
-        Alert.alert("Erro", data.message ?? "Falha ao enviar documento.");
+      if (error) {
+        throw error;
       }
+
+      const publicUrl = supabase.storage.from(bucketName).getPublicUrl(filePath).data.publicUrl;
+
+      Alert.alert("Enviado!", "Documento enviado para análise.");
+        const update: Partial<typeof user> = {};
+        let endpoint = "";
+        if (docType === "rg") { update.rgStatus = "pending"; update.rgUrl = publicUrl; endpoint = `/api/documents/upload-rg`; }
+        else if (docType === "cnh") { update.cnhStatus = "pending"; update.cnhUrl = publicUrl; endpoint = `/api/documents/upload-cnh`; }
+        else { update.crlvStatus = "pending"; update.crlvUrl = publicUrl; endpoint = `/api/documents/upload-crlv`; }
+
+        await apiFetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: publicUrl }),
+        });
+        await updateUserDocuments(update);
     } catch (err) {
       Alert.alert("Erro", "Falha ao enviar documento. Tente novamente.");
     } finally {

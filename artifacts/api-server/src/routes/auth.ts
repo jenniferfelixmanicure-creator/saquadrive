@@ -2,32 +2,13 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
-import twilio from "twilio";
+
 import { db } from "@workspace/db";
 import { usersTable, refreshTokensTable } from "@workspace/db";
 import { signAccessToken, signRefreshToken } from "../lib/auth.js";
 import { authenticate, type AuthRequest } from "../middlewares/authenticate.js";
 
-function getTwilioClient() {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  if (!sid || !token) return null;
-  return twilio(sid, token);
-}
 
-async function sendSms(to: string, body: string): Promise<boolean> {
-  const client = getTwilioClient();
-  const from = process.env.TWILIO_PHONE_NUMBER;
-  if (!client || !from) {
-    return false;
-  }
-  try {
-    await client.messages.create({ body, from, to });
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
 
 const router = Router();
 
@@ -49,14 +30,7 @@ const registerLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === "test",
 });
 
-const forgotLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  limit: 5,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  message: { message: "Muitas tentativas de recuperação. Tente novamente em 1 hora." },
-  skip: () => process.env.NODE_ENV === "test",
-});
+
 
 router.post("/auth/register", registerLimiter, async (req, res) => {
   try {
@@ -175,102 +149,8 @@ router.post("/auth/change-password", authenticate, async (req: AuthRequest, res)
   }
 });
 
-router.post("/auth/forgot-password", forgotLimiter, async (req, res) => {
-  try {
-    const { email, phone } = req.body as { email: string; phone?: string };
-    if (!email) {
-      res.status(400).json({ message: "E-mail é obrigatório" });
-      return;
-    }
 
-    const [user] = await db.select({ id: usersTable.id, phone: usersTable.phone })
-      .from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
 
-    // Always respond generically to avoid user enumeration
-    const genericOk = { message: "Identidade verificada. Você pode redefinir sua senha.", verified: true };
-    const genericFail = { message: "E-mail ou telefone incorretos.", verified: false };
 
-    if (!user) {
-      // Introduce artificial delay to prevent timing attacks
-      await new Promise(r => setTimeout(r, 400));
-      res.json(genericFail);
-      return;
-    }
-
-    // If phone provided, verify it matches (digits only comparison)
-    if (phone !== undefined) {
-      const normalize = (p: string) => p.replace(/\D/g, "").slice(-9);
-      if (normalize(phone) !== normalize(user.phone)) {
-        req.log.warn({ userId: user.id }, "Tentativa de recuperação com telefone incorreto");
-        res.json(genericFail);
-        return;
-      }
-    }
-
-    // Generate a secure reset token
-    const resetToken = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map(b => b.toString(16).padStart(2, "0")).join("");
-    const resetHash = await bcrypt.hash(resetToken, 10);
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-    await db.update(usersTable).set({
-      passwordResetToken: resetHash,
-      passwordResetExpiresAt: expiresAt,
-    }).where(eq(usersTable.id, user.id));
-
-    req.log.info({ userId: user.id }, "Token de recuperação gerado via verificação de telefone");
-    res.json({ ...genericOk, resetToken });
-  } catch (err: any) {
-    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
-    res.status(500).json({ message: `Erro interno: ${err.message}` });
-  }
-});
-
-router.post("/auth/reset-password", forgotLimiter, async (req, res) => {
-  try {
-    const { email, resetToken, newPassword } = req.body as {
-      email: string; resetToken: string; newPassword: string;
-    };
-    if (!email || !resetToken || !newPassword) {
-      res.status(400).json({ message: "Dados incompletos para redefinição de senha" });
-      return;
-    }
-    if (newPassword.length < 6) {
-      res.status(400).json({ message: "Nova senha deve ter no mínimo 6 caracteres" });
-      return;
-    }
-    const [user] = await db.select({
-      id: usersTable.id,
-      passwordResetToken: usersTable.passwordResetToken,
-      passwordResetExpiresAt: usersTable.passwordResetExpiresAt,
-    }).from(usersTable).where(eq(usersTable.email, email.toLowerCase())).limit(1);
-
-    if (!user || !user.passwordResetToken || !user.passwordResetExpiresAt) {
-      res.status(400).json({ message: "Solicitação de recuperação inválida ou expirada" });
-      return;
-    }
-    if (user.passwordResetExpiresAt < new Date()) {
-      res.status(400).json({ message: "Sessão expirada (15 min). Inicie o processo novamente." });
-      return;
-    }
-    const tokenValid = await bcrypt.compare(resetToken, user.passwordResetToken);
-    if (!tokenValid) {
-      res.status(400).json({ message: "Token inválido. Inicie o processo novamente." });
-      return;
-    }
-    const passwordHash = await bcrypt.hash(newPassword, 12);
-    await db.update(usersTable).set({
-      passwordHash,
-      passwordResetToken: null,
-      passwordResetExpiresAt: null,
-    }).where(eq(usersTable.id, user.id));
-    await db.delete(refreshTokensTable).where(eq(refreshTokensTable.userId, user.id));
-    req.log.info({ userId: user.id }, "Senha redefinida via verificação de telefone");
-    res.json({ message: "Senha redefinida com sucesso. Faça login com a nova senha." });
-  } catch (err: any) {
-    req.log.error({ err: err.message, stack: err.stack }, "Erro no login");
-    res.status(500).json({ message: `Erro interno: ${err.message}` });
-  }
-});
 
 export default router;

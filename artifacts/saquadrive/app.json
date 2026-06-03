@@ -95,6 +95,8 @@
     ],
     "owner": "zeroriscov4",
     "extra": {
+        "EXPO_PUBLIC_SUPABASE_URL": "PLACEHOLDER_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "PLACEHOLDER_SUPABASE_ANON_KEY",
       "router": {},
       "expo-navigation-bar": {
         "backgroundColor": "#00000000",
