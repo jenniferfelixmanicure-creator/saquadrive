@@ -22,9 +22,6 @@ echo "==> Instalando dependências..."
 pnpm install --no-frozen-lockfile
 
 # Aplicar migrações do banco de dados (não falhar o build se falhar aqui)
-echo "==> Aplicando schema do banco de dados..."
-# Ignorar falha no push durante o build, pois o banco já foi migrado manualmente
-pnpm --filter @workspace/db run push-force -- --yes || true
 
 # Build do api-server
 echo "==> Buildando api-server..."
